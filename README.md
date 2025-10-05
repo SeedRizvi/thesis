@@ -8,4 +8,4 @@ My amazing thesis project. Currently requiries the installation of
 - pytorch
 
 ## Limitations
-- dSGP4 does not support orbital periods > 225 minutes, i.e. GEO (not up to me)
+- dSGP4 does not support orbital periods > 225 minutes, i.e. GEO (out of my control)
