@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 
 #we load all TLEs:
-tles = dsgp4.tle.load("example.tle")
+tles = dsgp4.tle.load("../example.tle")
 #we only extract the first one:
 my_tle = tles[0]
 

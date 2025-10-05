@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 
 #we load all TLEs:
-tles = dsgp4.tle.load("example_bulk.tle")
+tles = dsgp4.tle.load("../example_bulk.tle")
 #we first need to prepare the data, the API requires that there are as many TLEs as times. Let us assume we want to
 #propagate each of the 
 tles_=[]
