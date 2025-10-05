@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from TLE import TLE
 
-prop_days = 30
-filepath = "../example_bulk_geo.tle"
+prop_days = 1
+filepath = "../example.tle"
 
 
 def load_tle_from_file(filename):
@@ -103,7 +103,8 @@ def plot_orbit(positions, label='Orbit', color='lightcoral'):
     x = earth_radius * np.outer(np.cos(u), np.sin(v))
     y = earth_radius * np.outer(np.sin(u), np.sin(v))
     z = earth_radius * np.outer(np.ones(np.size(u)), np.cos(v))
-    ax.plot_surface(x, y, z, color='lightblue', alpha=0.3)
+    earth_surface = ax.plot_surface(x, y, z, color='lightblue', alpha=0.3)
+    earth_surface.set_label('Earth')
     
     # Set labels and title
     ax.set_xlabel('X (km)')
