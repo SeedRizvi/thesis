@@ -3,6 +3,7 @@ My amazing thesis project. Currently requiries the installation of
 
 ## Dependencies
 - [dSGP4](https://github.com/esa/dSGP4/)
+- [SGP4](https://github.com/aholinch/sgp4)
 - matplotlib
 - pytorch
 
