@@ -7,9 +7,9 @@ My amazing thesis project. Currently requiries the installation of
 ```
 ~/thesis/
 ├── dsgp4/
+├── sgp4/
 ├── orbDetHOUSE/
 ├── orbtdethouse_wrapper.py
-├── sgp4/
 ├── README.md
 └── working_orbdethouse_wrapper.py
 ```
