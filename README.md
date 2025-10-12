@@ -9,9 +9,8 @@ My amazing thesis project. Currently requiries the installation of
 ├── dsgp4/
 ├── sgp4/
 ├── orbDetHOUSE/
-├── orbtdethouse_wrapper.py
-├── README.md
-└── working_orbdethouse_wrapper.py
+├── propagator.py
+└── README.md
 ```
 
 ### Setup
