@@ -18,6 +18,7 @@ My amazing thesis project. Currently requiries the installation of
 cd orbDetHOUSE/
 make -f makefile_py_wsl clean
 make -f makefile_py_wsl
+python3 pyscripts/test_orbit_propagator_wrapper_wsl.py # Tests installation
 cd ..
 ```
 
@@ -26,6 +27,7 @@ cd ..
 - matplotlib
 - numpy
 - pandas
+- pybind11
 
 #### Not currently in use, but here just in case
 - [dSGP4](https://github.com/esa/dSGP4/)
