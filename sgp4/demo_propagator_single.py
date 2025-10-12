@@ -12,7 +12,7 @@ import numpy as np
 from TLE import TLE
 
 prop_days = 1
-filepath = "../example.tle"
+filepath = "../tles/example.tle"
 
 
 def load_tle_from_file(filename):
