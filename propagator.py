@@ -1,5 +1,7 @@
 import sys
 import os
+import time
+import yaml
 
 
 def setup_env(orbdethouse_path):
@@ -42,15 +44,34 @@ def setup_env(orbdethouse_path):
         return None, None
 
 def run_propagation(orbit_propagator_wrapper):
-    # Assuming you have a class named OrbitPropagator in your C++ code
+    time.sleep(0.01)
     propagator = orbit_propagator_wrapper.OrbitPropagatorWrapper("yamls/config_orb.yml")
     results = propagator.propagateOrbit()
+    # 93600,-5447560.8920494,-4956657.29193027,-2305805.59242059,3491.01298853073,-945.945974206399,-6211.50713325284,
+    last_state = results[-1]
+    # Extract elements 1:7 from the last state (x, y, z, vx, vy, vz)
+    state_values = last_state[1:8].tolist()
 
-    # Define the headers and results file name
+    # Read the existing YAML file
+    with open('yamls/config_orb_copy.yml', 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Update only the initial_state in the initial_orbtial_parameters section
+    config['initial_orbtial_parameters']['initial_state'] = state_values
+
+    # Write the modified config back to the file
+    with open('yamls/config_orb_copy.yml', 'w') as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    propagator2 = orbit_propagator_wrapper.OrbitPropagatorWrapper("yamls/config_orb_copy.yml")
+    results2 = propagator2.propagateOrbit()
+
+    # Save the results
     headerTraj = ["tSec", "x", "y", "z", "vx", "vy", "vz"]
     resultsFileName = "prop_results_py.csv"
-    # Save the results
     propagator.saveResults(results, headerTraj, resultsFileName)
+    resultsFileName = "prop_results_py2.csv"
+    propagator.saveResults(results2, headerTraj, resultsFileName)
 
     print("Orbit propagation completed successfully")
 
