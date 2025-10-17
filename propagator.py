@@ -24,7 +24,7 @@ class OrbitPropagator:
             sys.path.insert(0, so_path)
         
         try:
-            import orbit_propagator_wrapper
+            import orbit_propagator_wrapper # type: ignore
             self.wrapper = orbit_propagator_wrapper
         except ImportError as e:
             raise ImportError(
