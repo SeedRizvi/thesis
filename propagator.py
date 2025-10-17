@@ -2,7 +2,9 @@ import sys
 import os
 import time
 import yaml
-
+import pandas as pd
+import matplotlib.pyplot as plt
+# from mpl_toolkits.mplot3d import Axes3D
 
 def setup_env(orbdethouse_path):
     """
@@ -75,6 +77,45 @@ def run_propagation(orbit_propagator_wrapper):
 
     print("Orbit propagation completed successfully")
 
+def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
+    """
+    Plot 3D orbital trajectory from propagation results.
+
+    Args:
+        csv_file (str): Path to CSV file with orbit data
+        output_file (str, optional): Path to save plot. If None, displays plot
+        title (str): Plot title
+    """
+    df = pd.read_csv(csv_file)
+    
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    ax.plot(df['x'].values, df['y'].values, df['z'].values, linewidth=0.8)
+    ax.scatter(df['x'].iloc[0], df['y'].iloc[0], df['z'].iloc[0], 
+               color='green', s=50, label='Start')
+    ax.scatter(df['x'].iloc[-1], df['y'].iloc[-1], df['z'].iloc[-1], 
+               color='red', s=50, label='End')
+    
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)')
+    ax.set_title(title)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    max_range = max(df[['x', 'y', 'z']].abs().max())
+    ax.set_xlim(-max_range, max_range)
+    ax.set_ylim(-max_range, max_range)
+    ax.set_zlim(-max_range, max_range)
+    
+    if output_file:
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {output_file}")
+    else:
+        plt.show()
+    
+    plt.close()
 
 def main(orbdethouse_path):
     """
@@ -92,7 +133,10 @@ def main(orbdethouse_path):
         return
 
     try:
-        run_propagation(orbit_propagator_wrapper)
+        # run_propagation(orbit_propagator_wrapper)
+        plot_orbit_3d("out/out_prop/prop_results_py.csv", 
+                  output_file="orbit_plot_1.png", 
+                  title="Orbit Propagation - Run 1")
 
     finally:
         # Always restore the original directory
