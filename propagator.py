@@ -1,90 +1,141 @@
 import sys
 import os
-import time
 import yaml
 import pandas as pd
 import matplotlib.pyplot as plt
-# from mpl_toolkits.mplot3d import Axes3D
 
-def setup_env(orbdethouse_path):
+
+class OrbitPropagator:
     """
-    Setup function to configure the environment for orbDetHOUSE. 
-
-    Args:
-        orbdethouse_path (str): Path to the orbDetHOUSE directory
-
-    Returns:
-        tuple: (original_dir, orbit_propagator_wrapper) or (None, None) if setup fails
+    Clean wrapper for orbDetHOUSE using direct .so import.
+    
+    Requirements:
+    - auxdata/ directory in root (copy from orbDetHOUSE/auxdata/)
+    
+    C++ behavior:
+    - Saves output files to out/out_prop{filename} (concatenates prefix with filename)
+    - Example: filename "results.csv" → saved as "out/out_propresults.csv"
     """
-    # Store original directory to restore later
-    original_dir = os.getcwd()
-
-    try:
-        # Change to orbDetHOUSE directory to handle relative path dependencies
-        os.chdir(orbdethouse_path)
-
-        # Add the directory containing the .so file to the system path
-        lib_path = os.path.abspath("wsllib")
-        sys.path.insert(0, lib_path)
-
-        # Check if the .so file exists in the lib_path
-        so_file = os.path.join(lib_path, "orbit_propagator_wrapper.so")
-        if not os.path.exists(so_file):
-            print(f"orbit_propagator_wrapper.so not found at {so_file}")
-            return None, None
-
+    def __init__(self, orbdethouse_path="orbDetHOUSE"):
+        self.orbdethouse_path = os.path.abspath(orbdethouse_path)
+        so_path = os.path.join(self.orbdethouse_path, "wsllib")
+        
+        if so_path not in sys.path:
+            sys.path.insert(0, so_path)
+        
         try:
-            import orbit_propagator_wrapper # type: ignore
-            print("Module imported successfully")
-            return original_dir, orbit_propagator_wrapper
-        except ModuleNotFoundError as e:
-            print(f"Import Error: {e}")
-            return None, None
+            import orbit_propagator_wrapper
+            self.wrapper = orbit_propagator_wrapper
+        except ImportError as e:
+            raise ImportError(
+                f"Failed to import orbit_propagator_wrapper from {so_path}. "
+                f"Run 'make -f makefile_py_wsl' in orbDetHOUSE first. Error: {e}"
+            )
+        
+        if not os.path.exists("auxdata"):
+            raise FileNotFoundError(
+                "auxdata/ directory not found in current directory. "
+                f"Copy it from {self.orbdethouse_path}/auxdata/ to your project root."
+            )
+        
+        os.makedirs("out", exist_ok=True)
+    
+    def propagate(self, config_file, output_file="results.csv"):
+        """
+        Run orbit propagation.
+        
+        Args:
+            config_file: Path to YAML config (absolute or relative to current dir)
+            output_file: Output filename (C++ will prepend out_prop to it)
+            
+        Returns:
+            Absolute path to output CSV
+        """
+        config_abs = os.path.abspath(config_file)
+        
+        if not os.path.exists(config_abs):
+            raise FileNotFoundError(f"Config not found: {config_abs}")
+        
+        propagator = self.wrapper.OrbitPropagatorWrapper(config_abs)
+        results = propagator.propagateOrbit()
+        
+        header = ["tSec", "x", "y", "z", "vx", "vy", "vz"]
+        
+        output_filename = os.path.basename(output_file) if isinstance(output_file, str) else output_file
+        
+        propagator.saveResults(results, header, output_filename)
+        
+        # C++ saves to out/out_prop + filename (concatenated, not directory)
+        output_path = os.path.abspath(os.path.join("out", f"out_prop{output_filename}"))
+        
+        if not os.path.exists(output_path):
+            raise RuntimeError(
+                f"Propagation completed but output not found at: {output_path}\n"
+                f"Results length: {len(results)}"
+            )
+        
+        return output_path
+    
+    def propagate_from_state(self, config_file, output_file="results_continued.csv"):
+        """
+        Run propagation, then start a new propagation from the final state.
+        
+        Args:
+            config_file: Template config to use
+            output_file: Output filename (C++ will prepend out_prop to it)
+            
+        Returns:
+            Tuple of (first_csv_path, continued_csv_path)
+        """
+        config_abs = os.path.abspath(config_file)
+        
+        if not os.path.exists(config_abs):
+            raise FileNotFoundError(f"Config not found: {config_abs}")
+        
+        propagator = self.wrapper.OrbitPropagatorWrapper(config_abs)
+        results = propagator.propagateOrbit()
+        
+        last_state = results[-1]
+        state_values = last_state[1:8].tolist()
+        
+        with open(config_abs, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        config['initial_orbtial_parameters']['initial_state'] = state_values
+        
+        temp_config = config_abs.replace('.yml', '_temp.yml')
+        with open(temp_config, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        
+        propagator2 = self.wrapper.OrbitPropagatorWrapper(temp_config)
+        results2 = propagator2.propagateOrbit()
+        
+        header = ["tSec", "x", "y", "z", "vx", "vy", "vz"]
+        
+        output_filename = os.path.basename(output_file)
+        first_filename = output_filename.replace('.csv', '_first.csv')
+        
+        propagator.saveResults(results, header, first_filename)
+        propagator2.saveResults(results2, header, output_filename)
+        
+        # C++ saves to out/out_prop + filename (concatenated)
+        first_output = os.path.abspath(os.path.join("out", f"out_prop{first_filename}"))
+        output_path = os.path.abspath(os.path.join("out", f"out_prop{output_filename}"))
+        
+        if not os.path.exists(output_path):
+            raise RuntimeError(f"Propagation completed but output not found at: {output_path}")
+        
+        return first_output, output_path
 
-    except Exception as e:
-        print(f"Setup error: {e}")
-        return None, None
-
-def run_propagation(orbit_propagator_wrapper):
-    time.sleep(0.01)
-    propagator = orbit_propagator_wrapper.OrbitPropagatorWrapper("yamls/config_orb.yml")
-    results = propagator.propagateOrbit()
-    # 93600,-5447560.8920494,-4956657.29193027,-2305805.59242059,3491.01298853073,-945.945974206399,-6211.50713325284,
-    last_state = results[-1]
-    # Extract elements 1:7 from the last state (x, y, z, vx, vy, vz)
-    state_values = last_state[1:8].tolist()
-
-    # Read the existing YAML file
-    with open('yamls/config_orb_copy.yml', 'r') as f:
-        config = yaml.safe_load(f)
-
-    # Update only the initial_state in the initial_orbtial_parameters section
-    config['initial_orbtial_parameters']['initial_state'] = state_values
-
-    # Write the modified config back to the file
-    with open('yamls/config_orb_copy.yml', 'w') as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-
-    propagator2 = orbit_propagator_wrapper.OrbitPropagatorWrapper("yamls/config_orb_copy.yml")
-    results2 = propagator2.propagateOrbit()
-
-    # Save the results
-    headerTraj = ["tSec", "x", "y", "z", "vx", "vy", "vz"]
-    resultsFileName = "prop_results_py.csv"
-    propagator.saveResults(results, headerTraj, resultsFileName)
-    resultsFileName = "prop_results_py2.csv"
-    propagator.saveResults(results2, headerTraj, resultsFileName)
-
-    print("Orbit propagation completed successfully")
 
 def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
     """
     Plot 3D orbital trajectory from propagation results.
 
     Args:
-        csv_file (str): Path to CSV file with orbit data
-        output_file (str, optional): Path to save plot. If None, displays plot
-        title (str): Plot title
+        csv_file: Path to CSV file with orbit data
+        output_file: Path to save plot. If None, displays plot
+        title: Plot title
     """
     df = pd.read_csv(csv_file)
     
@@ -117,34 +168,13 @@ def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
     
     plt.close()
 
-def main(orbdethouse_path):
-    """
-    Wrapper function to use orbDetHOUSE as a black box by changing to its directory
-    to handle relative path dependencies.
-
-    Args:
-        orbdethouse_path (str): Path to the orbDetHOUSE directory
-    """
-    # Setup environment
-    original_dir, orbit_propagator_wrapper = setup_env(orbdethouse_path)
-
-    if original_dir is None or orbit_propagator_wrapper is None:
-        print("orbtDetHOUSE setup failed...")
-        return
-
-    try:
-        # run_propagation(orbit_propagator_wrapper)
-        plot_orbit_3d("out/out_prop/prop_results_py.csv", 
-                  output_file="orbit_plot_1.png", 
-                  title="Orbit Propagation - Run 1")
-
-    finally:
-        # Always restore the original directory
-        os.chdir(original_dir)
-        print(f"Restored original directory: {os.getcwd()}")
-
 
 if __name__ == "__main__":
-    # Default orbDetHOUSE path if not provided
-    default_orbdethouse_path = os.path.abspath("orbDetHOUSE")
-    main(default_orbdethouse_path)
+    prop = OrbitPropagator("orbDetHOUSE")
+    
+    csv1 = prop.propagate("configs/config_orb.yml", output_file="results1.csv")
+    plot_orbit_3d(csv1, output_file="orbit1.png")
+    
+    csv1, csv2 = prop.propagate_from_state("configs/config_orb.yml", 
+                                           output_file="results2.csv")
+    plot_orbit_3d(csv2, output_file="orbit2.png")
