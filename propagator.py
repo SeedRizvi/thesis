@@ -3,6 +3,7 @@ import os
 import yaml
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class OrbitPropagator:
@@ -39,6 +40,7 @@ class OrbitPropagator:
             )
         
         os.makedirs("out", exist_ok=True)
+        os.makedirs("plots", exist_ok=True)
     
     def propagate(self, config_file, output_file="results.csv"):
         """
@@ -65,7 +67,6 @@ class OrbitPropagator:
         
         propagator.saveResults(results, header, output_filename)
         
-        # C++ saves to out/out_prop + filename (concatenated, not directory)
         output_path = os.path.abspath(os.path.join("out", f"out_prop{output_filename}"))
         
         if not os.path.exists(output_path):
@@ -76,16 +77,18 @@ class OrbitPropagator:
         
         return output_path
     
-    def propagate_from_state(self, config_file, output_file="results_continued.csv"):
+    def propagate_from_state(self, config_file, delta_v, output_file="results_continued.csv"):
         """
-        Run propagation, then start a new propagation from the final state.
+        Run propagation, apply delta-v to final state, then propagate again.
+        Generates 3 plots: first propagation, second propagation, and combined.
         
         Args:
             config_file: Template config to use
-            output_file: Output filename (C++ will prepend out_prop to it)
+            delta_v: Velocity vector [dvx, dvy, dvz] in m/s to apply to final state
+            output_file: Output filename for second propagation
             
         Returns:
-            Tuple of (first_csv_path, continued_csv_path)
+            Tuple of (first_csv_path, second_csv_path, combined_csv_path)
         """
         config_abs = os.path.abspath(config_file)
         
@@ -98,10 +101,16 @@ class OrbitPropagator:
         last_state = results[-1]
         state_values = last_state[1:8].tolist()
         
+        state_values[3] += delta_v[0]
+        state_values[4] += delta_v[1]
+        state_values[5] += delta_v[2]
+        
         with open(config_abs, 'r') as f:
             config = yaml.safe_load(f)
         
         config['initial_orbtial_parameters']['initial_state'] = state_values
+        config['scenario_parameters']['MJD_start'] = config['scenario_parameters']['MJD_end']
+        config['scenario_parameters']['MJD_end'] = config['scenario_parameters']['MJD_start'] + 0.5
         
         temp_config = config_abs.replace('.yml', '_temp.yml')
         with open(temp_config, 'w') as f:
@@ -113,19 +122,41 @@ class OrbitPropagator:
         header = ["tSec", "x", "y", "z", "vx", "vy", "vz"]
         
         output_filename = os.path.basename(output_file)
-        first_filename = output_filename.replace('.csv', '_first.csv')
+        first_filename = output_filename.replace('.csv', '_pre_delta.csv')
+        second_filename = output_filename.replace('.csv', '_post_delta.csv')
+        combined_filename = output_filename.replace('.csv', '_combined.csv')
         
         propagator.saveResults(results, header, first_filename)
-        propagator2.saveResults(results2, header, output_filename)
+        propagator2.saveResults(results2, header, second_filename)
         
-        # C++ saves to out/out_prop + filename (concatenated)
-        first_output = os.path.abspath(os.path.join("out", f"out_prop{first_filename}"))
-        output_path = os.path.abspath(os.path.join("out", f"out_prop{output_filename}"))
+        first_output = os.path.abspath(os.path.join("out", f"{first_filename}"))
+        second_output = os.path.abspath(os.path.join("out", f"{second_filename}"))
+        combined_output = os.path.abspath(os.path.join("out", f"{combined_filename}"))
         
-        if not os.path.exists(output_path):
-            raise RuntimeError(f"Propagation completed but output not found at: {output_path}")
+        if not os.path.exists(second_output):
+            raise RuntimeError(f"Propagation completed but output not found at: {second_output}")
         
-        return first_output, output_path
+        df1 = pd.read_csv(first_output)
+        df2 = pd.read_csv(second_output)
+        
+        time_offset = df1['tSec'].iloc[-1]
+        df2_shifted = df2.copy()
+        df2_shifted['tSec'] = df2_shifted['tSec'] + time_offset
+        
+        df_combined = pd.concat([df1, df2_shifted.iloc[1:]], ignore_index=True)
+        df_combined.to_csv(combined_output, index=False)
+        
+        plot_orbit_3d(first_output, 
+                     output_file="plots/pre_manouevre.png",
+                     title="First Propagation (Before Delta-V)")
+        plot_orbit_3d(second_output, 
+                     output_file="plots/post_manouevre.png",
+                     title="Second Propagation (After Delta-V)")
+        plot_orbit_3d(combined_output, 
+                     output_file="plots/combined.png",
+                     title="Combined Propagation (t0 → t1 → t2)")
+        
+        return first_output, second_output, combined_output
 
 
 def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
@@ -139,30 +170,33 @@ def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
     """
     df = pd.read_csv(csv_file)
     
+    x_km = df['x'].values / 1000.0
+    y_km = df['y'].values / 1000.0
+    z_km = df['z'].values / 1000.0
+    
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
     
-    ax.plot(df['x'].values, df['y'].values, df['z'].values, linewidth=0.8)
-    ax.scatter(df['x'].iloc[0], df['y'].iloc[0], df['z'].iloc[0], 
+    ax.plot(x_km, y_km, z_km, linewidth=0.8)
+    ax.scatter(x_km[0], y_km[0], z_km[0], 
                color='green', s=50, label='Start')
-    ax.scatter(df['x'].iloc[-1], df['y'].iloc[-1], df['z'].iloc[-1], 
+    ax.scatter(x_km[-1], y_km[-1], z_km[-1], 
                color='red', s=50, label='End')
     
-    ax.set_xlabel('X (m)')
-    ax.set_ylabel('Y (m)')
-    ax.set_zlabel('Z (m)')
+    ax.set_xlabel('X (km)')
+    ax.set_ylabel('Y (km)')
+    ax.set_zlabel('Z (km)')
     ax.set_title(title)
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    max_range = max(df[['x', 'y', 'z']].abs().max())
+    max_range = max([abs(x_km).max(), abs(y_km).max(), abs(z_km).max()])
     ax.set_xlim(-max_range, max_range)
     ax.set_ylim(-max_range, max_range)
     ax.set_zlim(-max_range, max_range)
     
     if output_file:
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {output_file}")
     else:
         plt.show()
     
@@ -172,9 +206,13 @@ def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
 if __name__ == "__main__":
     prop = OrbitPropagator("orbDetHOUSE")
     
-    csv1 = prop.propagate("configs/config_orb.yml", output_file="_results1.csv")
-    plot_orbit_3d(csv1, output_file="plots/orbit1.png")
+    # csv1 = prop.propagate("configs/config_orb_long.yml", output_file="results1.csv")
+    # plot_orbit_3d(csv1, output_file="plots/orbit1.png")
+
+    # csv2 = prop.propagate("configs/config_orb_short.yml", output_file="results2.csv")
+    # plot_orbit_3d(csv2, output_file="plots/orbit2.png")
     
-    csv1, csv2 = prop.propagate_from_state("configs/config_orb.yml", 
-                                           output_file="results2.csv")
-    plot_orbit_3d(csv2, output_file="plots/orbit2.png")
+    delta_v = [100.0, 50.0, -300.0] # m/s
+    csv1, csv2, csv_combined = prop.propagate_from_state("configs/config_orb.yml", 
+                                                          delta_v=delta_v,
+                                                          output_file="results.csv")
