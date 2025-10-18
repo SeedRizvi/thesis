@@ -1,18 +1,18 @@
 scenario_parameters:
   time_step: 60
-  MJD_start: 59348.9162384259
-  MJD_end: 59349.9995717593
+  MJD_start: 59348.5
+  MJD_end: 59349.0
   max_time_step: 60
-  output_directory: out/out_prop
+  output_directory: out/
 initial_orbtial_parameters:
   dim_state: 6
   initial_state:
-  - -5447560.892049404
-  - -4956657.291930266
-  - -2305805.5924205882
-  - 3491.012988530725
-  - -945.945974206399
-  - -6211.507133252835
+  - 4581588.124900462
+  - 5156063.561654096
+  - 3459956.0545526473
+  - -4243.528556858466
+  - 62.951702141652405
+  - 5426.937306589448
   initial_state_type: ECI
 propagator_truth_settings:
   earth_gravity_model_order: 100
