@@ -172,9 +172,9 @@ def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
 if __name__ == "__main__":
     prop = OrbitPropagator("orbDetHOUSE")
     
-    csv1 = prop.propagate("configs/config_orb.yml", output_file="results1.csv")
-    plot_orbit_3d(csv1, output_file="orbit1.png")
+    csv1 = prop.propagate("configs/config_orb.yml", output_file="_results1.csv")
+    plot_orbit_3d(csv1, output_file="plots/orbit1.png")
     
     csv1, csv2 = prop.propagate_from_state("configs/config_orb.yml", 
                                            output_file="results2.csv")
-    plot_orbit_3d(csv2, output_file="orbit2.png")
+    plot_orbit_3d(csv2, output_file="plots/orbit2.png")
