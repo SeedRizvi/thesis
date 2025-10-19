@@ -46,7 +46,7 @@ class SatelliteOrbitFGO:
             self.n_timesteps = 1
 
         self.GE = 3.986004418e14
-        self.J2 = 1.082626683e-3
+        self.J2 = 4.841692638330e-04
         self.R_earth = 6378137.0
 
         self.meas = meas

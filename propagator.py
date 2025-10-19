@@ -67,7 +67,7 @@ class OrbitPropagator:
         
         propagator.saveResults(results, header, output_filename)
         
-        output_path = os.path.abspath(os.path.join("out", f"out_prop{output_filename}"))
+        output_path = os.path.abspath(os.path.join("out", f"{output_filename}"))
         
         if not os.path.exists(output_path):
             raise RuntimeError(
