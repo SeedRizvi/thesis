@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Integration script for running Factor Graph Optimisation with orbDetHOUSE propagator
-Now supports both angular-only and angular+range measurements
+Supports both angular-only and angular+range measurements (see README)
 """
 
 import numpy as np
@@ -9,7 +9,7 @@ import pandas as pd
 import yaml
 from math import pi, atan2, sin, cos, sqrt
 import matplotlib.pyplot as plt
-from Orbit_FGO_with_range import SatelliteOrbitFGO
+from Orbit_FGO import SatelliteOrbitFGO
 
 
 def load_propagator_output(csv_path):
@@ -41,8 +41,8 @@ def simulate_measurements(states, times, ground_stations,
         measurements: Flattened array of measurements
         R: Measurement noise covariance matrix
     """
-    omega_earth = 7.2921159e-5
-    R_earth = 6378137.0
+    omega_earth = 7.2921159e-5 # Angular velocity of Earth (rad/s)
+    R_earth = 6378137.0 # Radius of Earth (m)
     
     measurements = []
     angle_noise_rad = np.deg2rad(measurement_noise_deg)
@@ -65,7 +65,7 @@ def simulate_measurements(states, times, ground_stations,
     
     measurements = np.array(measurements)
     
-    # Create measurement noise covariance matrix
+    # Measurement noise covariance matrix
     if use_range:
         R = np.eye(3)
         R[0, 0] = angle_noise_rad**2  # Azimuth
@@ -171,7 +171,7 @@ def load_config_parameters(config_path):
     return params, ground_stations
 
 
-def run_fgo_with_propagator(config_path, ground_stations=None,
+def run_fgo_with_propagator(config_path,
                            use_range=None,
                            measurement_noise_deg=None,
                            range_noise_m=None,
@@ -183,10 +183,9 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
                            verbose=True):
     """
     Complete pipeline: propagate orbit, simulate measurements, run FGO
-    
+
     Args:
         config_path: Path to orbit propagator config file
-        ground_stations: List of (lat, lon, alt) tuples, or None to load from config/defaults
         use_range: Whether to use range measurements (None to load from config)
         measurement_noise_deg: Measurement noise in degrees
         range_noise_m: Range measurement noise in meters
@@ -196,22 +195,22 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
         initial_vel_error: Initial velocity error std dev (m/s)
         max_iterations: Maximum optimisation iterations
         verbose: Print progress information
-        
+
     Returns:
         Dictionary with results
     """
-    
+
     # Load parameters from config
     config_params, config_stations = load_config_parameters(config_path)
-    
-    # Use provided parameters or fall back to config
-    if ground_stations is None:
+
+    # Use stations from config file if available, otherwise use defaults
+    if config_stations is not None:
         ground_stations = config_stations
-    if ground_stations is None:
-        # Default stations if not in config
+    else:
+        # Default ground stations if not defined in config
         ground_stations = [
             (np.deg2rad(40.7128), np.deg2rad(-74.0060), 0),   # New York
-            (np.deg2rad(51.5074), np.deg2rad(-0.1278), 0),    # London  
+            (np.deg2rad(51.5074), np.deg2rad(-0.1278), 0),    # London
             (np.deg2rad(35.6762), np.deg2rad(139.6503), 0),   # Tokyo
             (np.deg2rad(-33.8688), np.deg2rad(151.2093), 0),  # Sydney
             (np.deg2rad(1.3521), np.deg2rad(103.8198), 0),    # Singapore
