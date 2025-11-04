@@ -173,12 +173,6 @@ def load_config_parameters(config_path):
 
 def run_fgo_with_propagator(config_path,
                            use_range=None,
-                           measurement_noise_deg=None,
-                           range_noise_m=None,
-                           process_noise_pos=None,
-                           process_noise_vel=None,
-                           initial_pos_error=None,
-                           initial_vel_error=None,
                            max_iterations=None,
                            verbose=True):
     """
@@ -187,13 +181,7 @@ def run_fgo_with_propagator(config_path,
     Args:
         config_path: Path to orbit propagator config file
         use_range: Whether to use range measurements (None to load from config)
-        measurement_noise_deg: Measurement noise in degrees
-        range_noise_m: Range measurement noise in meters
-        process_noise_pos: Process noise for position (m)
-        process_noise_vel: Process noise for velocity (m/s)
-        initial_pos_error: Initial position error std dev (m)
-        initial_vel_error: Initial velocity error std dev (m/s)
-        max_iterations: Maximum optimisation iterations
+        max_iterations: Maximum optimisation iterations (None to load from config)
         verbose: Print progress information
 
     Returns:
@@ -216,16 +204,18 @@ def run_fgo_with_propagator(config_path,
             (np.deg2rad(1.3521), np.deg2rad(103.8198), 0),    # Singapore
             (np.deg2rad(-23.5505), np.deg2rad(-46.6333), 0)   # São Paulo
         ]
-    
-    # Use command line args or config values
+
+    # Override config with CLI arguments if provided
     use_range = use_range if use_range is not None else config_params['use_range']
-    measurement_noise_deg = measurement_noise_deg or config_params['measurement_noise_deg']
-    range_noise_m = range_noise_m or config_params['range_noise_m']
-    process_noise_pos = process_noise_pos or config_params['process_noise_pos']
-    process_noise_vel = process_noise_vel or config_params['process_noise_vel']
-    initial_pos_error = initial_pos_error or config_params['initial_pos_error']
-    initial_vel_error = initial_vel_error or config_params['initial_vel_error']
-    max_iterations = max_iterations or config_params['max_iterations']
+    max_iterations = max_iterations if max_iterations is not None else config_params['max_iterations']
+
+    # Load all other parameters from config
+    measurement_noise_deg = config_params['measurement_noise_deg']
+    range_noise_m = config_params['range_noise_m']
+    process_noise_pos = config_params['process_noise_pos']
+    process_noise_vel = config_params['process_noise_vel']
+    initial_pos_error = config_params['initial_pos_error']
+    initial_vel_error = config_params['initial_vel_error']
     
     if verbose:
         print("="*70)
@@ -553,29 +543,17 @@ if __name__ == '__main__':
                        help='Path to orbit propagator config file')
     parser.add_argument('--no-range', dest='use_range', action='store_false', default=True,
                        help='Disable range measurements (range enabled by default)')
-    parser.add_argument('--noise', type=float, default=None,
-                       help='Angular measurement noise in degrees')
-    parser.add_argument('--range-noise', type=float, default=None,
-                       help='Range measurement noise in meters')
-    parser.add_argument('--pos-error', type=float, default=None,
-                       help='Initial position error in meters')
-    parser.add_argument('--vel-error', type=float, default=None,
-                       help='Initial velocity error in m/s')
     parser.add_argument('--max-iters', type=int, default=None,
                        help='Maximum optimisation iterations')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
-    
+
     args = parser.parse_args()
-    
+
     # Run FGO pipeline
     results = run_fgo_with_propagator(
         config_path=args.config,
         use_range=args.use_range,
-        measurement_noise_deg=args.noise,
-        range_noise_m=args.range_noise,
-        initial_pos_error=args.pos_error,
-        initial_vel_error=args.vel_error,
         max_iterations=args.max_iters,
         verbose=not args.quiet
     )
