@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Integration script for running Factor Graph Optimization with orbDetHOUSE propagator
-This script bridges the gap between the orbit propagator and FGO implementation
+Integration script for running Factor Graph Optimisation with orbDetHOUSE propagator
+Now supports both angular-only and angular+range measurements
 """
 
 import numpy as np
@@ -10,7 +10,7 @@ import yaml
 import os
 from math import pi, atan2, sin, cos, sqrt
 import matplotlib.pyplot as plt
-from Orbit_FGO_fixed import SatelliteOrbitFGO
+from Orbit_FGO_with_range import SatelliteOrbitFGO
 
 
 def load_propagator_output(csv_path):
@@ -23,46 +23,63 @@ def load_propagator_output(csv_path):
     return states, times, dt
 
 
-def simulate_measurements(states, times, ground_stations, measurement_noise_deg=0.01):
+def simulate_measurements(states, times, ground_stations, 
+                          measurement_noise_deg=0.01,
+                          use_range=True,
+                          range_noise_m=100.0):
     """
-    Simulate azimuth/elevation measurements from ground stations
+    Simulate azimuth/elevation and optionally range measurements from ground stations
     
     Args:
         states: Array of satellite states [x, y, z, vx, vy, vz]
         times: Array of time points
         ground_stations: List of (lat, lon, alt) tuples for ground stations
-        measurement_noise_deg: Measurement noise in degrees
+        measurement_noise_deg: Measurement noise in degrees for angles
+        use_range: Whether to include range measurements
+        range_noise_m: Range measurement noise in meters
         
     Returns:
-        measurements: Flattened array of az/el measurements
+        measurements: Flattened array of measurements
         R: Measurement noise covariance matrix
     """
     omega_earth = 7.2921159e-5
     R_earth = 6378137.0
     
     measurements = []
-    noise_rad = np.deg2rad(measurement_noise_deg)
+    angle_noise_rad = np.deg2rad(measurement_noise_deg)
     
     for i, (state, t) in enumerate(zip(states, times)):
         for lat, lon, alt in ground_stations:
-            # Compute azimuth and elevation
-            az, el = compute_az_el(state[:3], (lat, lon, alt), t, 
-                                  omega_earth, R_earth)
+            # Compute measurements
+            az, el, rng = compute_measurements_full(state[:3], (lat, lon, alt), t, 
+                                                   omega_earth, R_earth)
             
             # Add measurement noise
-            az_meas = az + np.random.normal(0, noise_rad)
-            el_meas = el + np.random.normal(0, noise_rad)
+            az_meas = az + np.random.normal(0, angle_noise_rad)
+            el_meas = el + np.random.normal(0, angle_noise_rad)
             
-            measurements.extend([az_meas, el_meas])
+            if use_range:
+                rng_meas = rng + np.random.normal(0, range_noise_m)
+                measurements.extend([az_meas, el_meas, rng_meas])
+            else:
+                measurements.extend([az_meas, el_meas])
     
     measurements = np.array(measurements)
-    R = np.eye(2) * (noise_rad**2)
+    
+    # Create measurement noise covariance matrix
+    if use_range:
+        R = np.eye(3)
+        R[0, 0] = angle_noise_rad**2  # Azimuth
+        R[1, 1] = angle_noise_rad**2  # Elevation
+        R[2, 2] = range_noise_m**2    # Range
+    else:
+        R = np.eye(2) * angle_noise_rad**2
     
     return measurements, R
 
 
-def compute_az_el(r_sat_eci, station_llh, t, omega_earth, R_earth):
-    """Compute azimuth and elevation from ground station to satellite"""
+def compute_measurements_full(r_sat_eci, station_llh, t, omega_earth, R_earth):
+    """Compute azimuth, elevation, and range from ground station to satellite"""
     lat, lon, alt = station_llh
     
     # Earth rotation angle
@@ -88,6 +105,9 @@ def compute_az_el(r_sat_eci, station_llh, t, omega_earth, R_earth):
     # Relative position in ECI
     r_rel_eci = r_sat_eci - r_station_eci
     
+    # Range
+    range_val = np.linalg.norm(r_rel_eci)
+    
     # Convert to ECEF
     R_eci_to_ecef = R_ecef_to_eci.T
     r_rel_ecef = R_eci_to_ecef @ r_rel_eci
@@ -107,35 +127,89 @@ def compute_az_el(r_sat_eci, station_llh, t, omega_earth, R_earth):
     azimuth = atan2(e, n)
     elevation = atan2(u, range_horiz)
     
-    return azimuth, elevation
+    return azimuth, elevation, range_val
 
 
-def run_fgo_with_propagator(config_path, ground_stations=None, 
-                           measurement_noise_deg=0.01,
-                           process_noise_pos=100.0,
-                           process_noise_vel=0.01,
-                           initial_pos_error=1000.0,
-                           initial_vel_error=1.0,
+def load_config_parameters(config_path):
+    """Load FGO parameters from config file"""
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Default parameters
+    params = {
+        'use_range': True,
+        'measurement_noise_deg': 0.01,
+        'range_noise_m': 100.0,
+        'process_noise_pos': 100.0,
+        'process_noise_vel': 0.01,
+        'initial_pos_error': 1000.0,
+        'initial_vel_error': 1.0,
+        'max_iterations': 50
+    }
+    
+    # Load from config if available
+    if 'fgo_parameters' in config:
+        fgo_params = config['fgo_parameters']
+        params['use_range'] = fgo_params.get('use_range', True)
+        params['measurement_noise_deg'] = fgo_params.get('measurement_noise_deg', 0.01)
+        params['range_noise_m'] = fgo_params.get('range_noise_m', 100.0)
+        params['process_noise_pos'] = fgo_params.get('process_noise_position', 100.0)
+        params['process_noise_vel'] = fgo_params.get('process_noise_velocity', 0.01)
+        params['initial_pos_error'] = fgo_params.get('initial_position_error', 1000.0)
+        params['initial_vel_error'] = fgo_params.get('initial_velocity_error', 1.0)
+        params['max_iterations'] = fgo_params.get('max_iterations', 50)
+    
+    # Load ground stations if available
+    ground_stations = None
+    if 'ground_stations' in config:
+        ground_stations = []
+        for station in config['ground_stations']:
+            lat_deg = station.get('latitude', 0)
+            lon_deg = station.get('longitude', 0)
+            alt_m = station.get('altitude', 0)
+            ground_stations.append((np.deg2rad(lat_deg), np.deg2rad(lon_deg), alt_m))
+    
+    return params, ground_stations
+
+
+def run_fgo_with_propagator(config_path, ground_stations=None,
+                           use_range=None,
+                           measurement_noise_deg=None,
+                           range_noise_m=None,
+                           process_noise_pos=None,
+                           process_noise_vel=None,
+                           initial_pos_error=None,
+                           initial_vel_error=None,
+                           max_iterations=None,
                            verbose=True):
     """
     Complete pipeline: propagate orbit, simulate measurements, run FGO
     
     Args:
         config_path: Path to orbit propagator config file
-        ground_stations: List of (lat, lon, alt) tuples, or None for defaults
+        ground_stations: List of (lat, lon, alt) tuples, or None to load from config/defaults
+        use_range: Whether to use range measurements (None to load from config)
         measurement_noise_deg: Measurement noise in degrees
+        range_noise_m: Range measurement noise in meters
         process_noise_pos: Process noise for position (m)
         process_noise_vel: Process noise for velocity (m/s)
         initial_pos_error: Initial position error std dev (m)
         initial_vel_error: Initial velocity error std dev (m/s)
+        max_iterations: Maximum optimisation iterations
         verbose: Print progress information
         
     Returns:
         Dictionary with results
     """
     
-    # Default ground stations if not provided
+    # Load parameters from config
+    config_params, config_stations = load_config_parameters(config_path)
+    
+    # Use provided parameters or fall back to config
     if ground_stations is None:
+        ground_stations = config_stations
+    if ground_stations is None:
+        # Default stations if not in config
         ground_stations = [
             (np.deg2rad(40.7128), np.deg2rad(-74.0060), 0),   # New York
             (np.deg2rad(51.5074), np.deg2rad(-0.1278), 0),    # London  
@@ -145,10 +219,26 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
             (np.deg2rad(-23.5505), np.deg2rad(-46.6333), 0)   # São Paulo
         ]
     
+    # Use command line args or config values
+    use_range = use_range if use_range is not None else config_params['use_range']
+    measurement_noise_deg = measurement_noise_deg or config_params['measurement_noise_deg']
+    range_noise_m = range_noise_m or config_params['range_noise_m']
+    process_noise_pos = process_noise_pos or config_params['process_noise_pos']
+    process_noise_vel = process_noise_vel or config_params['process_noise_vel']
+    initial_pos_error = initial_pos_error or config_params['initial_pos_error']
+    initial_vel_error = initial_vel_error or config_params['initial_vel_error']
+    max_iterations = max_iterations or config_params['max_iterations']
+    
     if verbose:
         print("="*70)
-        print("Factor Graph Optimization Pipeline")
+        print("Factor Graph Optimisation Pipeline")
         print("="*70)
+        print("\nConfiguration:")
+        print(f"  Use range measurements: {use_range}")
+        print(f"  Measurement type: {'Azimuth/Elevation/Range' if use_range else 'Azimuth/Elevation only'}")
+        print(f"  Angular noise: {measurement_noise_deg} degrees")
+        if use_range:
+            print(f"  Range noise: {range_noise_m} meters")
     
     # Step 1: Run orbit propagator
     if verbose:
@@ -165,10 +255,11 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
         if verbose:
             print("   WARNING: Could not import propagator, using test data")
         # Generate test data as fallback
-        return run_fgo_test_case(ground_stations, measurement_noise_deg,
+        return run_fgo_test_case(ground_stations, use_range,
+                                measurement_noise_deg, range_noise_m,
                                 process_noise_pos, process_noise_vel,
                                 initial_pos_error, initial_vel_error,
-                                verbose)
+                                max_iterations, verbose)
     
     # Step 2: Load propagation results
     truth_states, times, dt = load_propagator_output(csv_path)
@@ -181,10 +272,12 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
     if verbose:
         print("\n2. Simulating measurements...")
         print(f"   Ground stations: {len(ground_stations)}")
-        print(f"   Measurement noise: {measurement_noise_deg} degrees")
+        print(f"   Angular noise: {measurement_noise_deg} degrees")
+        if use_range:
+            print(f"   Range noise: {range_noise_m} meters")
     
     measurements, R = simulate_measurements(truth_states, times, ground_stations, 
-                                           measurement_noise_deg)
+                                           measurement_noise_deg, use_range, range_noise_m)
     
     # Step 4: Setup process noise
     Q = np.eye(6)
@@ -208,11 +301,11 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
     
     # Step 6: Run FGO
     if verbose:
-        print("\n4. Running Factor Graph Optimization...")
+        print("\n4. Running Factor Graph Optimisation...")
         print("="*70)
     
-    fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0)
-    fgo.opt(max_iters=50, verbose=verbose)
+    fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0, use_range=use_range)
+    fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     # Step 7: Compute final errors
     errors = fgo.states - truth_states
@@ -223,10 +316,15 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
         print("\n" + "="*70)
         print("Final Results")
         print("="*70)
+        print(f"Measurement Type: {'Angular + Range' if use_range else 'Angular Only'}")
         print(f"Position RMS: {np.sqrt(np.mean(pos_errors**2)):.2f} m")
         print(f"Position Max: {np.max(pos_errors):.2f} m")
         print(f"Velocity RMS: {np.sqrt(np.mean(vel_errors**2)):.4f} m/s")
         print(f"Velocity Max: {np.max(vel_errors):.4f} m/s")
+        
+        if not use_range:
+            print("\nNote: High position errors are expected with angular-only measurements.")
+            print("Enable range measurements for sub-kilometer accuracy.")
     
     return {
         'fgo': fgo,
@@ -238,14 +336,16 @@ def run_fgo_with_propagator(config_path, ground_stations=None,
         'vel_errors': vel_errors,
         'times': times,
         'dt': dt,
-        'ground_stations': ground_stations
+        'ground_stations': ground_stations,
+        'use_range': use_range
     }
 
 
-def run_fgo_test_case(ground_stations, measurement_noise_deg,
+def run_fgo_test_case(ground_stations, use_range,
+                     measurement_noise_deg, range_noise_m,
                      process_noise_pos, process_noise_vel,
                      initial_pos_error, initial_vel_error,
-                     verbose=True):
+                     max_iterations, verbose=True):
     """Run FGO with generated test data (fallback when propagator unavailable)"""
     
     if verbose:
@@ -273,15 +373,22 @@ def run_fgo_test_case(ground_stations, measurement_noise_deg,
     Q[:3, :3] *= process_noise_pos
     Q[3:, 3:] *= process_noise_vel
     
-    R = np.eye(2) * (np.deg2rad(measurement_noise_deg))**2
+    if use_range:
+        R = np.eye(3)
+        R[0, 0] = (np.deg2rad(measurement_noise_deg))**2
+        R[1, 1] = (np.deg2rad(measurement_noise_deg))**2
+        R[2, 2] = range_noise_m**2
+    else:
+        R = np.eye(2) * (np.deg2rad(measurement_noise_deg))**2
     
-    fgo_truth = SatelliteOrbitFGO(np.zeros(N * len(ground_stations) * 2),
-                                  R, Q, ground_stations, dt, x0=x0_truth)
+    meas_per_station = 3 if use_range else 2
+    fgo_truth = SatelliteOrbitFGO(np.zeros(N * len(ground_stations) * meas_per_station),
+                                  R, Q, ground_stations, dt, x0=x0_truth, use_range=use_range)
     truth_states = fgo_truth.states.copy()
     
     # Simulate measurements
     measurements, _ = simulate_measurements(truth_states, times, ground_stations,
-                                           measurement_noise_deg)
+                                           measurement_noise_deg, use_range, range_noise_m)
     
     # Add initial errors
     x0 = x0_truth.copy()
@@ -289,8 +396,8 @@ def run_fgo_test_case(ground_stations, measurement_noise_deg,
     x0[3:] += np.random.normal(0, initial_vel_error, 3)
     
     # Run FGO
-    fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0)
-    fgo.opt(max_iters=50, verbose=verbose)
+    fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0, use_range=use_range)
+    fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     errors = fgo.states - truth_states
     pos_errors = np.linalg.norm(errors[:, :3], axis=1)
@@ -306,7 +413,8 @@ def run_fgo_test_case(ground_stations, measurement_noise_deg,
         'vel_errors': vel_errors,
         'times': times,
         'dt': dt,
-        'ground_stations': ground_stations
+        'ground_stations': ground_stations,
+        'use_range': use_range
     }
 
 
@@ -318,34 +426,27 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     errors = results['errors']
     pos_errors = results['pos_errors']
     vel_errors = results['vel_errors']
+    use_range = results.get('use_range', False)
     
     fig = plt.figure(figsize=(18, 12))
-    
-    # 3D Trajectory
-    ax1 = fig.add_subplot(241, projection='3d')
-    ax1.plot(truth[:, 0]/1e6, truth[:, 1]/1e6, truth[:, 2]/1e6,
+
+    # Add title with measurement type
+    meas_type = "Angular + Range" if use_range else "Angular Only"
+
+    # 3D Trajectory - spanning first two columns
+    ax1 = fig.add_subplot(2, 4, (1, 2), projection='3d')
+    ax1.plot(truth[:, 0]/1e3, truth[:, 1]/1e3, truth[:, 2]/1e3,
              'r-', linewidth=2, label='Truth')
-    ax1.plot(estimated[:, 0]/1e6, estimated[:, 1]/1e6, estimated[:, 2]/1e6,
+    ax1.plot(estimated[:, 0]/1e3, estimated[:, 1]/1e3, estimated[:, 2]/1e3,
              'b--', linewidth=1, alpha=0.7, label='Estimated')
-    ax1.set_xlabel('X (Mm)')
-    ax1.set_ylabel('Y (Mm)')
-    ax1.set_zlabel('Z (Mm)')
-    ax1.set_title('3D Trajectory')
+    ax1.set_xlabel('X (km)')
+    ax1.set_ylabel('Y (km)')
+    ax1.set_zlabel('Z (km)')
+    ax1.set_title(f'3D Trajectory ({meas_type})')
     ax1.legend()
-    
-    # XY plane
-    ax2 = fig.add_subplot(242)
-    ax2.plot(truth[:, 0]/1e6, truth[:, 1]/1e6, 'r-', label='Truth')
-    ax2.plot(estimated[:, 0]/1e6, estimated[:, 1]/1e6, 'b--', alpha=0.7, label='Estimated')
-    ax2.set_xlabel('X (Mm)')
-    ax2.set_ylabel('Y (Mm)')
-    ax2.set_title('XY Plane')
-    ax2.grid(True, alpha=0.3)
-    ax2.axis('equal')
-    ax2.legend()
-    
+
     # Position errors
-    ax3 = fig.add_subplot(243)
+    ax3 = fig.add_subplot(2, 4, 3)
     ax3.plot(errors[:, 0], label='X', alpha=0.7)
     ax3.plot(errors[:, 1], label='Y', alpha=0.7)
     ax3.plot(errors[:, 2], label='Z', alpha=0.7)
@@ -356,7 +457,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax3.grid(True, alpha=0.3)
     
     # Velocity errors
-    ax4 = fig.add_subplot(244)
+    ax4 = fig.add_subplot(2, 4, 4)
     ax4.plot(errors[:, 3]*1000, label='Vx', alpha=0.7)
     ax4.plot(errors[:, 4]*1000, label='Vy', alpha=0.7)
     ax4.plot(errors[:, 5]*1000, label='Vz', alpha=0.7)
@@ -365,20 +466,20 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax4.set_title('Velocity Component Errors')
     ax4.legend()
     ax4.grid(True, alpha=0.3)
-    
+
     # Total position error
-    ax5 = fig.add_subplot(245)
+    ax5 = fig.add_subplot(2, 4, 5)
     ax5.plot(pos_errors)
-    ax5.axhline(y=np.mean(pos_errors), color='r', linestyle='--', 
+    ax5.axhline(y=np.mean(pos_errors), color='r', linestyle='--',
                 label=f'Mean: {np.mean(pos_errors):.1f}m')
     ax5.set_xlabel('Time Step')
     ax5.set_ylabel('Position Error (m)')
     ax5.set_title('Total Position Error')
     ax5.legend()
     ax5.grid(True, alpha=0.3)
-    
+
     # Total velocity error
-    ax6 = fig.add_subplot(246)
+    ax6 = fig.add_subplot(2, 4, 6)
     ax6.plot(vel_errors*1000)
     ax6.axhline(y=np.mean(vel_errors)*1000, color='r', linestyle='--',
                 label=f'Mean: {np.mean(vel_errors)*1000:.2f}mm/s')
@@ -387,28 +488,41 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax6.set_title('Total Velocity Error')
     ax6.legend()
     ax6.grid(True, alpha=0.3)
-    
+
     # Error histogram
-    ax7 = fig.add_subplot(247)
+    ax7 = fig.add_subplot(2, 4, 7)
     ax7.hist(pos_errors, bins=30, alpha=0.7, edgecolor='black')
     ax7.set_xlabel('Position Error (m)')
     ax7.set_ylabel('Frequency')
     ax7.set_title('Position Error Distribution')
     ax7.grid(True, alpha=0.3)
+
+    # Summary statistics
+    ax8 = fig.add_subplot(2, 4, 8)
+    ax8.axis('off')
+    stats_text = f"""
+    Measurement Type: {meas_type}
     
-    # Convergence metric
-    ax8 = fig.add_subplot(248)
-    window = min(10, len(pos_errors)//10)
-    if window > 1:
-        rolling_rms = np.convolve(pos_errors**2, np.ones(window)/window, mode='valid')
-        rolling_rms = np.sqrt(rolling_rms)
-        ax8.plot(rolling_rms)
-        ax8.set_xlabel('Time Step')
-        ax8.set_ylabel('Rolling RMS Error (m)')
-        ax8.set_title(f'Convergence (window={window})')
-        ax8.grid(True, alpha=0.3)
+    Position Errors:
+      RMS: {np.sqrt(np.mean(pos_errors**2)):.2f} m
+      Max: {np.max(pos_errors):.2f} m
+      Mean: {np.mean(pos_errors):.2f} m
+      
+    Velocity Errors:
+      RMS: {np.sqrt(np.mean(vel_errors**2)):.4f} m/s
+      Max: {np.max(vel_errors):.4f} m/s
+      Mean: {np.mean(vel_errors):.4f} m/s
+      
+    Ground Stations: {len(results['ground_stations'])}
+    Timesteps: {len(truth)}
+    """
+    ax8.text(0.1, 0.5, stats_text, transform=ax8.transAxes, 
+            fontsize=10, verticalalignment='center',
+            fontfamily='monospace')
+    ax8.set_title('Summary Statistics')
     
-    plt.suptitle('Factor Graph Optimization Results', fontsize=14, fontweight='bold')
+    plt.suptitle(f'Factor Graph Optimisation Results - {meas_type}', 
+                fontsize=14, fontweight='bold')
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     print(f"\nPlot saved to: {save_path}")
@@ -419,15 +533,21 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
 if __name__ == '__main__':
     import argparse
     
-    parser = argparse.ArgumentParser(description='Run Factor Graph Optimization')
+    parser = argparse.ArgumentParser(description='Run Factor Graph Optimisation')
     parser.add_argument('--config', type=str, default='configs/config_geo_realistic.yml',
                        help='Path to orbit propagator config file')
-    parser.add_argument('--noise', type=float, default=0.01,
-                       help='Measurement noise in degrees')
-    parser.add_argument('--pos-error', type=float, default=1000.0,
+    parser.add_argument('--no-range', dest='use_range', action='store_false', default=True,
+                       help='Disable range measurements (range enabled by default)')
+    parser.add_argument('--noise', type=float, default=None,
+                       help='Angular measurement noise in degrees')
+    parser.add_argument('--range-noise', type=float, default=None,
+                       help='Range measurement noise in meters')
+    parser.add_argument('--pos-error', type=float, default=None,
                        help='Initial position error in meters')
-    parser.add_argument('--vel-error', type=float, default=1.0,
+    parser.add_argument('--vel-error', type=float, default=None,
                        help='Initial velocity error in m/s')
+    parser.add_argument('--max-iters', type=int, default=None,
+                       help='Maximum optimisation iterations')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
     
@@ -436,22 +556,28 @@ if __name__ == '__main__':
     # Run FGO pipeline
     results = run_fgo_with_propagator(
         config_path=args.config,
+        use_range=args.use_range,
         measurement_noise_deg=args.noise,
+        range_noise_m=args.range_noise,
         initial_pos_error=args.pos_error,
         initial_vel_error=args.vel_error,
+        max_iterations=args.max_iters,
         verbose=not args.quiet
     )
     
     # Generate plots
-    plot_fgo_results(results, save_path='fgo_pipeline_results.png')
+    save_name = './plots/fgo_results_full.png' if results['use_range'] else './plots/fgo_results_angular.png'
+    plot_fgo_results(results, save_path=save_name)
     
     # Save results
-    np.savez('fgo_pipeline_results.npz',
+    save_data = './out/fgo_results_full.npz' if results['use_range'] else './out/fgo_results_angular.npz'
+    np.savez(save_data,
              truth=results['truth'],
              estimated=results['estimated'],
              errors=results['errors'],
-             times=results['times'])
+             times=results['times'],
+             use_range=results['use_range'])
     
-    print("\nResults saved to: fgo_pipeline_results.npz")
+    print(f"\nResults saved to: {save_data}")
     
     plt.show()
