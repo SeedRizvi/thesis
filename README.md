@@ -1,5 +1,11 @@
 # Thesis
-My amazing thesis project where I propagate orbits and do data fusion and tracking stuff!
+My FGO-based Impulsive Manoeuvre Estimation thesis project.
+
+## Credits
+- [orbDetHOUSE](https://github.com/YangDrYang/orbDetHOUSE/tree/python_wrapper_propagator) for providing the propagator used for orbit data.
+
+- [C. Taylor and J. Gross](https://github.com/cntaylor/factorGraph2DsatelliteExample), 2D FGO satellite orbit model, which was adapted into 3D for this project in [Orbit_FGO.py](Orbit_FGO.py).
+
 
 ## Project Structure
 
@@ -12,7 +18,7 @@ My amazing thesis project where I propagate orbits and do data fusion and tracki
 ├── orbDetHOUSE/          # C++ propagator dependency
 ├── propagator.py         # Orbit propagator wrapper
 ├── fgo_pipeline.py       # Factor Graph Optimisation pipeline
-├── Orbit_FGO_with_range.py  # FGO implementation
+├── Orbit_FGO.py          # FGO implementation
 ├── setup_orbdethouse.py  # Setup script
 └── README.md
 ```
