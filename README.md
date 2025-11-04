@@ -30,19 +30,25 @@ Run the Factor Graph Optimisation pipeline with default settings:
 python fgo_pipeline.py
 ```
 
-Use a custom configuration file:
+### Command-Line Options
+
+All FGO parameters (noise levels, errors, etc.) are configured via the config file. The following CLI options are available:
+
+- `--config PATH` - Path to configuration file (default: `configs/config_geo_realistic.yml`)
+- `--no-range` - Disable range measurements, use angular-only
+- `--max-iters N` - Override maximum optimization iterations from config
+- `--quiet` - Suppress verbose output
+
+**Examples:**
 ```bash
+# Use a custom configuration file
 python fgo_pipeline.py --config configs/your_config_file.yml
-```
 
-Disable range measurements (use angular-only):
-```bash
+# Disable range measurements
 python fgo_pipeline.py --no-range
-```
 
-For all available options, run:
-```bash
-python fgo_pipeline.py --help
+# Override max iterations and run quietly
+python fgo_pipeline.py --max-iters 100 --quiet
 ```
 
 ## Quick Setup
