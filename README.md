@@ -53,6 +53,8 @@ python fgo_pipeline.py --max-iters 100 --quiet
 
 ## Quick Setup
 
+**Note**: These installation instructions are for WSL/Linux machines only.
+
 ### Option 1: Automated Setup (Recommended)
 
 **1. Clone orbDetHOUSE**
