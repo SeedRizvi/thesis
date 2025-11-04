@@ -35,7 +35,7 @@ def simulate_measurements(states, times, ground_stations,
         ground_stations: List of (lat, lon, alt) tuples for ground stations
         measurement_noise_deg: Measurement noise in degrees for angles
         use_range: Whether to include range measurements
-        range_noise_m: Range measurement noise in meters
+        range_noise_m: Range measurement noise in metres
         
     Returns:
         measurements: Flattened array of measurements
@@ -226,28 +226,18 @@ def run_fgo_with_propagator(config_path,
         print(f"  Measurement type: {'Azimuth/Elevation/Range' if use_range else 'Azimuth/Elevation only'}")
         print(f"  Angular noise: {measurement_noise_deg} degrees")
         if use_range:
-            print(f"  Range noise: {range_noise_m} meters")
+            print(f"  Range noise: {range_noise_m} metres")
     
     # Step 1: Run orbit propagator
     if verbose:
         print("\n1. Running orbit propagator...")
-    
-    try:
-        from propagator import OrbitPropagator
-        prop = OrbitPropagator("orbDetHOUSE")
-        csv_path = prop.propagate(config_path, output_file="fgo_truth.csv")
-        
-        if verbose:
-            print(f"   Propagation complete: {csv_path}")
-    except ImportError:
-        if verbose:
-            print("   WARNING: Could not import propagator, using test data")
-        # Generate test data as fallback
-        return run_fgo_test_case(ground_stations, use_range,
-                                measurement_noise_deg, range_noise_m,
-                                process_noise_pos, process_noise_vel,
-                                initial_pos_error, initial_vel_error,
-                                max_iterations, verbose)
+
+    from propagator import OrbitPropagator
+    prop = OrbitPropagator("orbDetHOUSE")
+    csv_path = prop.propagate(config_path, output_file="fgo_truth.csv")
+
+    if verbose:
+        print(f"   Propagation complete: {csv_path}")
     
     # Step 2: Load propagation results
     truth_states, times, dt = load_propagator_output(csv_path)
@@ -262,7 +252,7 @@ def run_fgo_with_propagator(config_path,
         print(f"   Ground stations: {len(ground_stations)}")
         print(f"   Angular noise: {measurement_noise_deg} degrees")
         if use_range:
-            print(f"   Range noise: {range_noise_m} meters")
+            print(f"   Range noise: {range_noise_m} metres")
     
     measurements, R = simulate_measurements(truth_states, times, ground_stations, 
                                            measurement_noise_deg, use_range, range_noise_m)
@@ -282,16 +272,14 @@ def run_fgo_with_propagator(config_path,
     
     initial_pos_error_actual = np.linalg.norm(x0[:3] - truth_states[0, :3])
     initial_vel_error_actual = np.linalg.norm(x0[3:] - truth_states[0, 3:])
-    
+
     if verbose:
         print(f"   Position error: {initial_pos_error_actual:.1f} m")
         print(f"   Velocity error: {initial_vel_error_actual:.3f} m/s")
-    
-    # Step 6: Run FGO
-    if verbose:
         print("\n4. Running Factor Graph Optimisation...")
         print("="*70)
     
+    # Step 6: Run FGO
     fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0, use_range=use_range)
     fgo.opt(max_iters=max_iterations, verbose=verbose)
     
@@ -313,83 +301,6 @@ def run_fgo_with_propagator(config_path,
         if not use_range:
             print("\nNote: High position errors are expected with angular-only measurements.")
             print("Enable range measurements for sub-kilometer accuracy.")
-    
-    return {
-        'fgo': fgo,
-        'truth': truth_states,
-        'estimated': fgo.states,
-        'measurements': measurements,
-        'errors': errors,
-        'pos_errors': pos_errors,
-        'vel_errors': vel_errors,
-        'times': times,
-        'dt': dt,
-        'ground_stations': ground_stations,
-        'use_range': use_range
-    }
-
-
-def run_fgo_test_case(ground_stations, use_range,
-                     measurement_noise_deg, range_noise_m,
-                     process_noise_pos, process_noise_vel,
-                     initial_pos_error, initial_vel_error,
-                     max_iterations, verbose=True):
-    """Run FGO with generated test data (fallback when propagator unavailable)"""
-    
-    if verbose:
-        print("   Using generated test case (GEO satellite)")
-    
-    # Generate GEO test case
-    r0 = 42164000  # GEO radius
-    inclination = np.deg2rad(5)
-    
-    x0_truth = np.array([
-        r0 * cos(inclination),
-        0,
-        r0 * sin(inclination),
-        0,
-        sqrt(3.986004418e14 / r0) * cos(inclination),
-        0
-    ])
-    
-    dt = 60.0
-    N = 100
-    times = np.arange(N) * dt
-    
-    # Generate truth trajectory
-    Q = np.eye(6)
-    Q[:3, :3] *= process_noise_pos
-    Q[3:, 3:] *= process_noise_vel
-    
-    if use_range:
-        R = np.eye(3)
-        R[0, 0] = (np.deg2rad(measurement_noise_deg))**2
-        R[1, 1] = (np.deg2rad(measurement_noise_deg))**2
-        R[2, 2] = range_noise_m**2
-    else:
-        R = np.eye(2) * (np.deg2rad(measurement_noise_deg))**2
-    
-    meas_per_station = 3 if use_range else 2
-    fgo_truth = SatelliteOrbitFGO(np.zeros(N * len(ground_stations) * meas_per_station),
-                                  R, Q, ground_stations, dt, x0=x0_truth, use_range=use_range)
-    truth_states = fgo_truth.states.copy()
-    
-    # Simulate measurements
-    measurements, _ = simulate_measurements(truth_states, times, ground_stations,
-                                           measurement_noise_deg, use_range, range_noise_m)
-    
-    # Add initial errors
-    x0 = x0_truth.copy()
-    x0[:3] += np.random.normal(0, initial_pos_error, 3)
-    x0[3:] += np.random.normal(0, initial_vel_error, 3)
-    
-    # Run FGO
-    fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0, use_range=use_range)
-    fgo.opt(max_iters=max_iterations, verbose=verbose)
-    
-    errors = fgo.states - truth_states
-    pos_errors = np.linalg.norm(errors[:, :3], axis=1)
-    vel_errors = np.linalg.norm(errors[:, 3:], axis=1)
     
     return {
         'fgo': fgo,

@@ -34,8 +34,8 @@ class SatelliteOrbitFGO:
                  ground_stations: list,
                  dt: float = 60.0,
                  x0: np.array = None,
-                 use_range: bool = True,  # NEW: Enable range measurements
-                 meas_per_station: int = None):  # NEW: Auto-detect measurement type
+                 use_range: bool = True,
+                 meas_per_station: int = None):  # Detect measurement type (AZ/EL or AZ/EL/RANGE)
         
         self.ground_stations = ground_stations
         self.n_stations = len(ground_stations)
@@ -81,7 +81,7 @@ class SatelliteOrbitFGO:
             # Extend R matrix for range measurements
             R_extended = np.eye(3)
             R_extended[:2, :2] = R
-            R_extended[2, 2] = 100.0**2  # 100m range noise (adjust as needed)
+            R_extended[2, 2] = 100.0**2  # TODO: 100m range noise (ADJUSTABLE)
             self.S_R_inv = la.inv(la.cholesky(R_extended))
             print(f"Extended R matrix for range with 100m std dev")
         else:
@@ -407,7 +407,7 @@ class SatelliteOrbitFGO:
                 break
         
         if verbose:
-            print(f'\nOptimization finished after {num_iters} iterations')
+            print(f'\nOptimisation finished after {num_iters} iterations')
             print(f'Final cost: {best_cost:.2e}')
 
 
@@ -511,7 +511,7 @@ def compare_with_without_range():
         # Run FGO
         fgo = SatelliteOrbitFGO(meas, R, Q, ground_stations, dt, x0=x0, use_range=use_range)
         
-        print(f"\nRunning optimization...")
+        print(f"\nRunning optimisation...")
         fgo.opt(max_iters=30, verbose=False)
         
         # Compute errors
@@ -631,7 +631,7 @@ def compare_with_without_range():
     ax.set_title('Performance Improvement with Range')
     ax.grid(True, alpha=0.3, axis='y')
     
-    # Color bars based on improvement
+    # Colour bars based on improvement
     for bar, imp in zip(bars, improvements):
         if imp > 50:
             bar.set_color('green')
@@ -640,7 +640,7 @@ def compare_with_without_range():
         else:
             bar.set_color('orange')
     
-    plt.suptitle('Factor Graph Optimization: Impact of Range Measurements', fontsize=14, fontweight='bold')
+    plt.suptitle('Factor Graph Optimisation: Impact of Range Measurements', fontsize=14, fontweight='bold')
     plt.tight_layout()
     plt.savefig('fgo_range_comparison.png', dpi=150)
     print(f"\nComparison plot saved to: fgo_range_comparison.png")
