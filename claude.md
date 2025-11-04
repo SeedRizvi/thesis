@@ -8,7 +8,7 @@ This thesis project implements Factor Graph Optimisation (FGO) for satellite orb
 ```
 ~/thesis/
 ├── fgo_pipeline.py           # Main FGO pipeline script
-├── Orbit_FGO_with_range.py   # Core FGO implementation
+├── Orbit_FGO.py              # Core FGO implementation
 ├── propagator.py             # orbDetHOUSE Python wrapper
 ├── setup_orbdethouse.py      # Setup script for dependencies
 ├── configs/                  # Configuration files
@@ -47,20 +47,18 @@ This thesis project implements Factor Graph Optimisation (FGO) for satellite orb
   - Summary statistics
 
 **Command-line Arguments**:
-- `--config`: Path to config file (default: `configs/config_geo_realistic.yml`)
+- `--config PATH`: Path to config file (default: `configs/config_geo_realistic.yml`)
 - `--no-range`: Disable range measurements (range enabled by default)
-- `--noise`: Angular measurement noise in degrees
-- `--range-noise`: Range measurement noise in metres
-- `--pos-error`: Initial position error std dev
-- `--vel-error`: Initial velocity error std dev
-- `--max-iters`: Maximum optimisation iterations
+- `--max-iters N`: Maximum optimisation iterations (overrides config)
 - `--quiet`: Suppress verbose output
+
+**Note**: All FGO parameters (measurement noise, range noise, process noise, initial errors) are configured via the YAML config file under the `fgo_parameters` section. Only the above runtime options are available via command-line.
 
 **Output**:
 - Saves plots to `./plots/fgo_results_full.png` or `./plots/fgo_results_angular.png`
 - Saves numerical results to `./out/fgo_results_full.npz` or `./out/fgo_results_angular.npz`
 
-### Orbit_FGO_with_range.py
+### Orbit_FGO.py
 **Purpose**: Core Factor Graph Optimisation implementation for satellite orbit determination
 
 **Main Class**: `SatelliteOrbitFGO`
