@@ -7,7 +7,6 @@ Now supports both angular-only and angular+range measurements
 import numpy as np
 import pandas as pd
 import yaml
-import os
 from math import pi, atan2, sin, cos, sqrt
 import matplotlib.pyplot as plt
 from Orbit_FGO_with_range import SatelliteOrbitFGO
@@ -444,6 +443,23 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax1.set_zlabel('Z (km)')
     ax1.set_title(f'3D Trajectory ({meas_type})')
     ax1.legend()
+
+    # Set equal aspect ratio to show true orbital geometry
+    truth_km = truth / 1e3  # Convert to km
+    max_range = np.array([
+        truth_km[:, 0].max() - truth_km[:, 0].min(),
+        truth_km[:, 1].max() - truth_km[:, 1].min(),
+        truth_km[:, 2].max() - truth_km[:, 2].min()
+    ]).max() / 2.0
+
+    mid_x = (truth_km[:, 0].max() + truth_km[:, 0].min()) * 0.5
+    mid_y = (truth_km[:, 1].max() + truth_km[:, 1].min()) * 0.5
+    mid_z = (truth_km[:, 2].max() + truth_km[:, 2].min()) * 0.5
+
+    ax1.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax1.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax1.set_zlim(mid_z - max_range, mid_z + max_range)
+    ax1.set_box_aspect([1, 1, 1])
 
     # Position errors
     ax3 = fig.add_subplot(2, 4, 3)
