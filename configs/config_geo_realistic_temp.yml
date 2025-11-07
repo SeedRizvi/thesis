@@ -1,0 +1,71 @@
+scenario_parameters:
+  time_step: 60
+  MJD_start: 59349.583333333336
+  MJD_end: 59350.083333333336
+  max_time_step: 60
+  output_directory: out/
+initial_orbtial_parameters:
+  dim_state: 6
+  initial_state:
+  - -18891735.374589507
+  - -37302103.87165701
+  - -1654648.3105220643
+  - 2737.5183064089547
+  - -1413.5059871951999
+  - 289.76125786858677
+  initial_state_type: ECI
+propagator_truth_settings:
+  earth_gravity_model_order: 20
+  earth_gravity_model_degree: 20
+  third_body_attraction: true
+  third_body_sun: true
+  third_body_moon: true
+  solid_earth_tide: false
+  ocean_tide_loading: false
+  solar_radiation_pressure: true
+  atmospheric_drag: false
+  relativity_effect: true
+  srpCoef: 1.0
+  srpArea: 10.0
+  dragCoef: 2.0
+  dragArea: 5.0
+  satMass: 1000.0
+supporting_files:
+  gravity_file: ./auxdata/GGM03S.txt
+  ephemeris_file: ./auxdata/linux_p1550p2650.440
+  ERP_file: ./auxdata/cod21587.erp
+ground_stations:
+- name: New York
+  latitude: 40.7128
+  longitude: -74.006
+  altitude: 0.0
+- name: London
+  latitude: 51.5074
+  longitude: -0.1278
+  altitude: 0.0
+- name: Tokyo
+  latitude: 35.6762
+  longitude: 139.6503
+  altitude: 0.0
+- name: Sydney
+  latitude: -33.8688
+  longitude: 151.2093
+  altitude: 0.0
+- name: Singapore
+  latitude: 1.3521
+  longitude: 103.8198
+  altitude: 0.0
+- name: Sao Paulo
+  latitude: -23.5505
+  longitude: -46.6333
+  altitude: 0.0
+fgo_parameters:
+  use_range: true
+  measurement_noise_deg: 0.01
+  range_noise_m: 100.0
+  process_noise_position: 100.0
+  process_noise_velocity: 0.01
+  initial_position_error: 1000.0
+  initial_velocity_error: 1.0
+  max_iterations: 50
+  convergence_threshold: 0.001

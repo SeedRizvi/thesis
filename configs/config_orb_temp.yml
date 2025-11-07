@@ -10,9 +10,9 @@ initial_orbtial_parameters:
   - 4581588.124900462
   - 5156063.561654096
   - 3459956.0545526473
-  - -4243.528556858466
-  - 62.951702141652405
-  - 5426.937306589448
+  - -4343.528556858466
+  - 12.951702141652406
+  - 5776.937306589448
   initial_state_type: ECI
 propagator_truth_settings:
   earth_gravity_model_order: 100

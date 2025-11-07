@@ -110,23 +110,25 @@ class OrbitPropagator:
         
         config['initial_orbtial_parameters']['initial_state'] = state_values
         config['scenario_parameters']['MJD_start'] = config['scenario_parameters']['MJD_end']
-        config['scenario_parameters']['MJD_end'] = config['scenario_parameters']['MJD_start'] + 0.5
-        
-        temp_config = config_abs.replace('.yml', '_temp.yml')
-        with open(temp_config, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-        
-        propagator2 = self.wrapper.OrbitPropagatorWrapper(temp_config)
-        results2 = propagator2.propagateOrbit()
+        config['scenario_parameters']['MJD_end'] = config['scenario_parameters']['MJD_start'] + 0.1
         
         header = ["tSec", "x", "y", "z", "vx", "vy", "vz"]
-        
+
         output_filename = os.path.basename(output_file)
         first_filename = output_filename.replace('.csv', '_pre_delta.csv')
         second_filename = output_filename.replace('.csv', '_post_delta.csv')
         combined_filename = output_filename.replace('.csv', '_combined.csv')
-        
+
+        # Save first results before cleanup
         propagator.saveResults(results, header, first_filename)
+
+        temp_config = config_abs.replace('.yml', '_temp.yml')
+        with open(temp_config, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        propagator2 = self.wrapper.OrbitPropagatorWrapper(temp_config)
+        results2 = propagator2.propagateOrbit()
+
         propagator2.saveResults(results2, header, second_filename)
         
         first_output = os.path.abspath(os.path.join("out", f"{first_filename}"))
@@ -212,7 +214,8 @@ if __name__ == "__main__":
     # csv2 = prop.propagate("configs/config_orb_short.yml", output_file="results2.csv")
     # plot_orbit_3d(csv2, output_file="plots/orbit2.png")
     
-    delta_v = [100.0, 50.0, -300.0] # m/s
+    # delta_v = [100.0, 50.0, -300.0] # m/s
+    delta_v = [0.0, 0.0, 50] # m/s
     csv1, csv2, csv_combined = prop.propagate_from_state("configs/config_orb.yml", 
                                                           delta_v=delta_v,
                                                           output_file="results.csv")
