@@ -174,6 +174,7 @@ def load_config_parameters(config_path):
 def run_fgo_with_propagator(config_path,
                            use_range=None,
                            max_iterations=None,
+                           delta_v=None,
                            verbose=True):
     """
     Complete pipeline: propagate orbit, simulate measurements, run FGO
@@ -182,6 +183,7 @@ def run_fgo_with_propagator(config_path,
         config_path: Path to orbit propagator config file
         use_range: Whether to use range measurements (None to load from config)
         max_iterations: Maximum optimisation iterations (None to load from config)
+        delta_v: Delta-v vector [dvx, dvy, dvz] in m/s (None for no maneuver)
         verbose: Print progress information
 
     Returns:
@@ -231,10 +233,18 @@ def run_fgo_with_propagator(config_path,
     # Step 1: Run orbit propagator
     if verbose:
         print("\n1. Running orbit propagator...")
+        if delta_v is not None:
+            print(f"   Applying delta-v: {delta_v} m/s")
 
     from propagator import OrbitPropagator
     prop = OrbitPropagator("orbDetHOUSE")
-    csv_path = prop.propagate(config_path, output_file="fgo_truth.csv")
+
+    if delta_v is not None:
+        # Use propagate_from_state with delta-v maneuver
+        _, _, csv_path = prop.propagate_from_state(config_path, delta_v=delta_v, output_file="fgo_truth.csv")
+    else:
+        # Normal propagation without maneuver
+        csv_path = prop.propagate(config_path, output_file="fgo_truth.csv")
 
     if verbose:
         print(f"   Propagation complete: {csv_path}")
@@ -456,16 +466,21 @@ if __name__ == '__main__':
                        help='Disable range measurements (range enabled by default)')
     parser.add_argument('--max-iters', type=int, default=None,
                        help='Maximum optimisation iterations')
+    parser.add_argument('--delta_v', type=float, nargs=3, metavar=('X', 'Y', 'Z'),
+                       help='Delta-v vector in m/s (e.g., --delta_v 10 10 10)')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
 
     args = parser.parse_args()
+
+    np.random.seed(42)  # For reproducibility
 
     # Run FGO pipeline
     results = run_fgo_with_propagator(
         config_path=args.config,
         use_range=args.use_range,
         max_iterations=args.max_iters,
+        delta_v=args.delta_v,
         verbose=not args.quiet
     )
     
