@@ -6,7 +6,7 @@ to_delete/
 # Ignore all output files
 out/*
 !out/fgo_truth.csv
-!out/fgo_results_full.npz
+!out/fgo_results.npz
 # Ignore all plots except specific ones
 # plots/*
 # !plots/combined.png
