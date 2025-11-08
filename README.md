@@ -154,9 +154,7 @@ python fgo_pipeline.py
 
 **Root Cause:** The orbDetHOUSE C++ wrapper lacks proper resource cleanup (no destructor to free JPL ephemeris memory) and maintains corrupted global state after the first propagation.
 
-**Solution:** The `propagator_split.py` implementation runs each propagation in a separate Python process, for fresh module loading and preventing state corruption. This is now the default propagator used by `fgo_pipeline.py`.
-
-**Details:** See [SEGFAULT_INVESTIGATION_REPORT.md](SEGFAULT_INVESTIGATION_REPORT.md) for complete technical analysis.
+**Solution:** The `propagator.py` implementation now runs each propagation in a separate Python process, for fresh module loading and preventing state corruption. This is now the default propagator used by `fgo_pipeline.py`.
 
 ## Notes
 
