@@ -4,7 +4,7 @@
 scenario_parameters:
   time_step: 60  # 1 minute timesteps
   MJD_start: 59349.00
-  MJD_end: 59349.30  # ~3.6 hours of data  
+  MJD_end: 59349.15  # ~3.6 hours of data  
   max_time_step: 60
   output_directory: out/
 
@@ -98,3 +98,9 @@ fgo_parameters:
   # Optimisation settings
   max_iterations: 50
   convergence_threshold: 0.001
+
+manoeuvre_parameters:
+  # Manoeuvre Delta-V: [X, Y, Z] (m/s)
+  delta_v: [0.0, 0.0, 1.0]
+  # Post-Manoeuvre Propagation Duration
+  pm_duration: 0.15  # Duration in days (0.15 days = 3.6 hours)

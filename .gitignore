@@ -212,3 +212,11 @@ __marimo__/
 
 to_delete/
 *temp*.yml
+
+# Ignore all plots except specific ones
+plots/*
+!plots/combined.png
+!plots/fgo_results_full.png
+
+# # Ignore all output files
+# out/*

@@ -1,7 +1,7 @@
 scenario_parameters:
   time_step: 60
   MJD_start: 59348.5
-  MJD_end: 59349.0
+  MJD_end: 59348.6
   max_time_step: 60
   output_directory: out/
 initial_orbtial_parameters:
