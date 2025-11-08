@@ -84,7 +84,7 @@ fgo_parameters:
 
   # Measurement configuration
   use_range: true  # Enable range measurements for better accuracy
-  measurement_noise_deg: 0.01  # Angular measurement noise in degrees
+  measurement_noise_deg: 0.00278  # Angular measurement noise (deg) - Currently 10 arcseconds
   range_noise_m: 100.0  # Range measurement noise in metres
   
   # Process noise (dynamics uncertainty)
