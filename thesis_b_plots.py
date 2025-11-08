@@ -14,8 +14,8 @@ configs = [
     ("configs/config_geo_short.yml", "fgo_results_no_manoeuvre.png"),
     ("configs/config_geo_short_deltaZ1.yml", "fgo_results_deltaZ1.png"),
     ("configs/config_geo_short_deltaZ2.yml", "fgo_results_deltaZ2.png"),
-    ("configs/config_geo_short_deltaZ5.yml", "fgo_results_no_manoeuvre_deltaZ5.png"),
-    ("configs/config_geo_short_deltaZ50.yml", "fgo_results_no_manoeuvre_deltaZ50.png"),
+    ("configs/config_geo_short_deltaZ5.yml", "fgo_results_deltaZ5.png"),
+    ("configs/config_geo_short_deltaZ50.yml", "fgo_results_deltaZ50.png"),
 ]
 
 def run_fgo_and_save_plot(config_file, output_name):
