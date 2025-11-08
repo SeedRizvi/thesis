@@ -11,11 +11,11 @@ import shutil
 
 # Configuration files and their corresponding output names
 configs = [
-    ("configs/config_geo_short.yml", "fgo_results_full_no_manoeuvre.png"),
-    ("configs/config_geo_short_deltaZ1.yml", "fgo_results_full_deltaZ1.png"),
-    ("configs/config_geo_short_deltaZ2.yml", "fgo_results_full_deltaZ2.png"),
-    ("configs/config_geo_short_deltaZ5.yml", "fgo_results_full_deltaZ5.png"),
-    ("configs/config_geo_short_deltaZ50.yml", "fgo_results_full_deltaZ50.png"),
+    ("configs/config_geo_short.yml", "fgo_results_no_manoeuvre.png"),
+    ("configs/config_geo_short_deltaZ1.yml", "fgo_results_deltaZ1.png"),
+    ("configs/config_geo_short_deltaZ2.yml", "fgo_results_deltaZ2.png"),
+    ("configs/config_geo_short_deltaZ5.yml", "fgo_results_no_manoeuvre_deltaZ5.png"),
+    ("configs/config_geo_short_deltaZ50.yml", "fgo_results_no_manoeuvre_deltaZ50.png"),
 ]
 
 def run_fgo_and_save_plot(config_file, output_name):
@@ -38,7 +38,7 @@ def run_fgo_and_save_plot(config_file, output_name):
         print(result.stdout)
 
         # Rename the main output plot
-        source = "plots/fgo_results_full.png"
+        source = "plots/fgo_results.png"
         destination = f"plots/{output_name}"
 
         if os.path.exists(source):
@@ -48,7 +48,7 @@ def run_fgo_and_save_plot(config_file, output_name):
             print(f"✗ Warning: Expected plot not found at {source}")
 
         # Rename the errors plot
-        source_errors = "plots/fgo_results_full_errors.png"
+        source_errors = "plots/fgo_results_errors.png"
         # Create errors plot name from main plot name
         destination_errors = f"plots/{output_name.replace('.png', '_errors.png')}"
 
