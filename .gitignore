@@ -3,13 +3,13 @@ orbDetHOUSE/
 to_delete/
 *temp*.yml
 
+# Ignore all output files
+out/*
+
 # Ignore all plots except specific ones
 # plots/*
 # !plots/combined.png
 # !plots/fgo_results_full.png
-
-# # Ignore all output files
-# out/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
