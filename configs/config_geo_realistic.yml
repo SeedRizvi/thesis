@@ -1,5 +1,5 @@
 # Configuration file for GEO satellite orbit propagation
-# Optimized for Factor Graph Optimization testing
+# Optimised for Factor Graph Optimization testing
 
 scenario_parameters:
   time_step: 60  # 1 minute timesteps
