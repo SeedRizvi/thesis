@@ -357,10 +357,9 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     
     fig = plt.figure(figsize=(18, 12))
 
-    # Add title with measurement type
     meas_type = "Angular + Range" if use_range else "Angular Only"
 
-    # 3D Trajectory - spanning first two columns
+    # 3D Trajectory
     ax1 = fig.add_subplot(2, 4, (1, 2), projection='3d')
     ax1.plot(truth[:, 0]/1e3, truth[:, 1]/1e3, truth[:, 2]/1e3,
              'r-', linewidth=2, label='Truth')
@@ -389,8 +388,37 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax1.set_zlim(mid_z - max_range, mid_z + max_range)
     ax1.set_box_aspect([1, 1, 1])
 
+    # Summary statistics
+    ax2 = fig.add_subplot(2, 4, (3, 4))
+    ax2.axis('off')
+    stats_text = f"""
+    Measurement Type: {meas_type}
+
+    Delta-V Manoeuvre:
+      X: {delta_v[0]} m/s
+      Y: {delta_v[1]} m/s
+      Z: {delta_v[2]} m/s
+
+    Position Errors:
+      RMS: {np.sqrt(np.mean(pos_errors**2)):.2f} m
+      Max: {np.max(pos_errors):.2f} m
+      Mean: {np.mean(pos_errors):.2f} m
+
+    Velocity Errors:
+      RMS: {np.sqrt(np.mean(vel_errors**2)):.4f} m/s
+      Max: {np.max(vel_errors):.4f} m/s
+      Mean: {np.mean(vel_errors):.4f} m/s
+
+    Ground Stations: {len(results['ground_stations'])}
+    Timesteps: {len(truth)}
+    """
+    ax2.text(0.1, 0.5, stats_text, transform=ax2.transAxes,
+            fontsize=10, verticalalignment='center',
+            fontfamily='monospace')
+    ax2.set_title('Summary Statistics')
+
     # Position errors
-    ax3 = fig.add_subplot(2, 4, 3)
+    ax3 = fig.add_subplot(2, 4, (5, 6))
     ax3.plot(errors[:, 0], label='X', alpha=0.7)
     ax3.plot(errors[:, 1], label='Y', alpha=0.7)
     ax3.plot(errors[:, 2], label='Z', alpha=0.7)
@@ -399,9 +427,9 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax3.set_title('Position Component Errors')
     ax3.legend()
     ax3.grid(True, alpha=0.3)
-    
+
     # Velocity errors
-    ax4 = fig.add_subplot(2, 4, 4)
+    ax4 = fig.add_subplot(2, 4, (7, 8))
     ax4.plot(errors[:, 3]*1000, label='Vx', alpha=0.7)
     ax4.plot(errors[:, 4]*1000, label='Vy', alpha=0.7)
     ax4.plot(errors[:, 5]*1000, label='Vz', alpha=0.7)
@@ -411,73 +439,47 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax4.legend()
     ax4.grid(True, alpha=0.3)
 
-    # Total position error
-    ax5 = fig.add_subplot(2, 4, 5)
-    ax5.plot(pos_errors)
-    ax5.axhline(y=np.mean(pos_errors), color='r', linestyle='--',
-                label=f'Mean: {np.mean(pos_errors):.1f}m')
-    ax5.set_xlabel('Time (minutes)')
-    ax5.set_ylabel('Position Error (m)')
-    ax5.set_title('Total Position Error')
-    ax5.xaxis.set_major_locator(plt.MultipleLocator(50))
-    ax5.legend()
-    ax5.grid(True, alpha=0.3)
-
-    # Total velocity error
-    ax6 = fig.add_subplot(2, 4, 6)
-    ax6.plot(vel_errors*1000)
-    ax6.axhline(y=np.mean(vel_errors)*1000, color='r', linestyle='--',
-                label=f'Mean: {np.mean(vel_errors)*1000:.2f}mm/s')
-    ax6.set_xlabel('Time (minutes)')
-    ax6.set_ylabel('Velocity Error (mm/s)')
-    ax6.set_title('Total Velocity Error')
-    ax6.xaxis.set_major_locator(plt.MultipleLocator(50))
-    ax6.legend()
-    ax6.grid(True, alpha=0.3)
-
-    # Error histogram
-    ax7 = fig.add_subplot(2, 4, 7)
-    ax7.hist(pos_errors, bins=30, alpha=0.7, edgecolor='black')
-    ax7.set_xlabel('Position Error (m)')
-    ax7.set_ylabel('Frequency')
-    ax7.set_title('Position Error Distribution')
-    ax7.grid(True, alpha=0.3)
-
-    # Summary statistics
-    ax8 = fig.add_subplot(2, 4, 8)
-    ax8.axis('off')
-    stats_text = f"""
-    Measurement Type: {meas_type}
-
-    Delta-V Manoeuvre:
-      X: {delta_v[0]} m/s
-      Y: {delta_v[1]} m/s
-      Z: {delta_v[2]} m/s
-    
-    Position Errors:
-      RMS: {np.sqrt(np.mean(pos_errors**2)):.2f} m
-      Max: {np.max(pos_errors):.2f} m
-      Mean: {np.mean(pos_errors):.2f} m
-      
-    Velocity Errors:
-      RMS: {np.sqrt(np.mean(vel_errors**2)):.4f} m/s
-      Max: {np.max(vel_errors):.4f} m/s
-      Mean: {np.mean(vel_errors):.4f} m/s
-      
-    Ground Stations: {len(results['ground_stations'])}
-    Timesteps: {len(truth)}
-    """
-    ax8.text(0.1, 0.5, stats_text, transform=ax8.transAxes, 
-            fontsize=10, verticalalignment='center',
-            fontfamily='monospace')
-    ax8.set_title('Summary Statistics')
-    
-    plt.suptitle(f'Factor Graph Optimisation Results - {meas_type}', 
+    plt.suptitle(f'FGO Results - {meas_type}',
                 fontsize=14, fontweight='bold')
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     print(f"\nPlot saved to: {save_path}")
-    
+
+    # Second figure for total errors
+    fig2 = plt.figure(figsize=(16, 5))
+
+    # Total position error
+    ax_pos = fig2.add_subplot(1, 2, 1)
+    ax_pos.plot(pos_errors)
+    ax_pos.axhline(y=np.mean(pos_errors), color='r', linestyle='--',
+                   label=f'Mean: {np.mean(pos_errors):.1f}m')
+    ax_pos.set_xlabel('Time (minutes)')
+    ax_pos.set_ylabel('Position Error (m)')
+    ax_pos.set_title('Total Position Error')
+    ax_pos.xaxis.set_major_locator(plt.MultipleLocator(25))
+    ax_pos.legend()
+    ax_pos.grid(True, alpha=0.3)
+
+    # Total velocity error
+    ax_vel = fig2.add_subplot(1, 2, 2)
+    ax_vel.plot(vel_errors*1000)
+    ax_vel.axhline(y=np.mean(vel_errors)*1000, color='r', linestyle='--',
+                   label=f'Mean: {np.mean(vel_errors)*1000:.2f}mm/s')
+    ax_vel.set_xlabel('Time (minutes)')
+    ax_vel.set_ylabel('Velocity Error (mm/s)')
+    ax_vel.set_title('Total Velocity Error')
+    ax_vel.xaxis.set_major_locator(plt.MultipleLocator(25))
+    ax_vel.legend()
+    ax_vel.grid(True, alpha=0.3)
+
+    plt.suptitle(f'Total Errors - Measurements: {meas_type}', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+
+    # Save second figure with _errors suffix
+    error_save_path = save_path.replace('.png', '_errors.png')
+    plt.savefig(error_save_path, dpi=150)
+    print(f"Error plots saved to: {error_save_path}")
+
     return fig
 
 
