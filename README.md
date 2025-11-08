@@ -36,7 +36,7 @@ All FGO parameters (noise levels, errors, etc.) are configured via the config fi
 
 - `--config PATH` - Path to configuration file (default: `configs/config_geo_realistic.yml`)
 - `--no-range` - Disable range measurements, use angular-only
-- `--max-iters N` - Override maximum optimization iterations from config
+- `--max-iters N` - Override maximum optimisation iterations from config
 - `--quiet` - Suppress verbose output
 
 **Examples:**
@@ -145,6 +145,18 @@ python fgo_pipeline.py
 - matplotlib
 - pyyaml
 - pybind11 (for orbDetHOUSE compilation)
+
+## Known Issues
+
+### Segmentation Faults with Delta-V Maneuvers
+
+**Issue:** Running delta-v maneuvers (e.g., `python3 fgo_pipeline.py --delta_v 0 0 50`) causes segmentation faults when creating multiple propagator instances (which is required to avoid discontinuities).
+
+**Root Cause:** The orbDetHOUSE C++ wrapper lacks proper resource cleanup (no destructor to free JPL ephemeris memory) and maintains corrupted global state after the first propagation.
+
+**Solution:** The `propagator_split.py` implementation runs each propagation in a separate Python process, for fresh module loading and preventing state corruption. This is now the default propagator used by `fgo_pipeline.py`.
+
+**Details:** See [SEGFAULT_INVESTIGATION_REPORT.md](SEGFAULT_INVESTIGATION_REPORT.md) for complete technical analysis.
 
 ## Notes
 
