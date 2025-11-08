@@ -133,7 +133,7 @@ def load_config_parameters(config_path):
     """Load FGO parameters from config file"""
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
-    
+
     # Default parameters
     params = {
         'use_range': True,
@@ -143,9 +143,11 @@ def load_config_parameters(config_path):
         'process_noise_vel': 0.01,
         'initial_pos_error': 1000.0,
         'initial_vel_error': 1.0,
-        'max_iterations': 50
+        'max_iterations': 50,
+        'delta_v': None,
+        'pm_duration': 0.15
     }
-    
+
     # Load from config if available
     if 'fgo_parameters' in config:
         fgo_params = config['fgo_parameters']
@@ -157,7 +159,13 @@ def load_config_parameters(config_path):
         params['initial_pos_error'] = fgo_params.get('initial_position_error', 1000.0)
         params['initial_vel_error'] = fgo_params.get('initial_velocity_error', 1.0)
         params['max_iterations'] = fgo_params.get('max_iterations', 50)
-    
+
+    # Load manoeuvre parameters if available
+    if 'manoeuvre_parameters' in config:
+        manoeuvre_params = config['manoeuvre_parameters']
+        params['delta_v'] = manoeuvre_params.get('delta_v', None)
+        params['pm_duration'] = manoeuvre_params.get('pm_duration', 0.15)
+
     # Load ground stations if available
     ground_stations = None
     if 'ground_stations' in config:
@@ -183,7 +191,7 @@ def run_fgo_with_propagator(config_path,
         config_path: Path to orbit propagator config file
         use_range: Whether to use range measurements (None to load from config)
         max_iterations: Maximum optimisation iterations (None to load from config)
-        delta_v: Delta-v vector [dvx, dvy, dvz] in m/s (None for no maneuver)
+        delta_v: Delta-v vector [dvx, dvy, dvz] in m/s (None to load from config)
         verbose: Print progress information
 
     Returns:
@@ -210,6 +218,7 @@ def run_fgo_with_propagator(config_path,
     # Override config with CLI arguments if provided
     use_range = use_range if use_range is not None else config_params['use_range']
     max_iterations = max_iterations if max_iterations is not None else config_params['max_iterations']
+    delta_v = delta_v if delta_v is not None else config_params['delta_v']
 
     # Load all other parameters from config
     measurement_noise_deg = config_params['measurement_noise_deg']
@@ -218,6 +227,7 @@ def run_fgo_with_propagator(config_path,
     process_noise_vel = config_params['process_noise_vel']
     initial_pos_error = config_params['initial_pos_error']
     initial_vel_error = config_params['initial_vel_error']
+    duration = config_params['pm_duration']
     
     if verbose:
         print("="*70)
@@ -229,6 +239,9 @@ def run_fgo_with_propagator(config_path,
         print(f"  Angular noise: {measurement_noise_deg} degrees")
         if use_range:
             print(f"  Range noise: {range_noise_m} metres")
+        if delta_v is not None:
+            print(f"  Delta-v manoeuvre: {delta_v} m/s")
+            print(f"  Post-manoeuvre duration: {duration} days")
     
     # Step 1: Run orbit propagator
     if verbose:
@@ -240,10 +253,11 @@ def run_fgo_with_propagator(config_path,
     prop = OrbitPropagator("orbDetHOUSE")
 
     if delta_v is not None:
-        # Use propagate_from_state with delta-v maneuver
-        _, _, csv_path = prop.propagate_from_state(config_path, delta_v=delta_v, output_file="fgo_truth.csv")
+        # Use propagate_from_state with delta-v manoeuvre
+        print("   Propagating with manoeuvre...")
+        _, _, csv_path = prop.propagate_from_state(config_path, delta_v=delta_v, output_file="fgo_truth.csv", duration=duration)
     else:
-        # Normal propagation without maneuver
+        # Normal propagation without manoeuvre
         csv_path = prop.propagate(config_path, output_file="fgo_truth.csv")
 
     if verbose:
@@ -376,7 +390,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax3.plot(errors[:, 0], label='X', alpha=0.7)
     ax3.plot(errors[:, 1], label='Y', alpha=0.7)
     ax3.plot(errors[:, 2], label='Z', alpha=0.7)
-    ax3.set_xlabel('Time Step')
+    ax3.set_xlabel('Time (minutes)')
     ax3.set_ylabel('Position Error (m)')
     ax3.set_title('Position Component Errors')
     ax3.legend()
@@ -387,7 +401,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax4.plot(errors[:, 3]*1000, label='Vx', alpha=0.7)
     ax4.plot(errors[:, 4]*1000, label='Vy', alpha=0.7)
     ax4.plot(errors[:, 5]*1000, label='Vz', alpha=0.7)
-    ax4.set_xlabel('Time Step')
+    ax4.set_xlabel('Time (minutes)')
     ax4.set_ylabel('Velocity Error (mm/s)')
     ax4.set_title('Velocity Component Errors')
     ax4.legend()
@@ -398,7 +412,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax5.plot(pos_errors)
     ax5.axhline(y=np.mean(pos_errors), color='r', linestyle='--',
                 label=f'Mean: {np.mean(pos_errors):.1f}m')
-    ax5.set_xlabel('Time Step')
+    ax5.set_xlabel('Time (minutes)')
     ax5.set_ylabel('Position Error (m)')
     ax5.set_title('Total Position Error')
     ax5.legend()
@@ -409,7 +423,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax6.plot(vel_errors*1000)
     ax6.axhline(y=np.mean(vel_errors)*1000, color='r', linestyle='--',
                 label=f'Mean: {np.mean(vel_errors)*1000:.2f}mm/s')
-    ax6.set_xlabel('Time Step')
+    ax6.set_xlabel('Time (minutes)')
     ax6.set_ylabel('Velocity Error (mm/s)')
     ax6.set_title('Total Velocity Error')
     ax6.legend()
@@ -467,7 +481,7 @@ if __name__ == '__main__':
     parser.add_argument('--max-iters', type=int, default=None,
                        help='Maximum optimisation iterations')
     parser.add_argument('--delta_v', type=float, nargs=3, metavar=('X', 'Y', 'Z'),
-                       help='Delta-v vector in m/s (e.g., --delta_v 10 10 10)')
+                       help='Delta-v vector in m/s (overrides config file, e.g., --delta_v 10 10 10)')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
 
