@@ -79,8 +79,6 @@ ground_stations:
 
 # FGO-specific parameters
 fgo_parameters:
-  # Note: Set use_range to false for angular-only measurements
-  # This will result in higher position errors (~7km RMS vs ~160m RMS with range)
 
   # Measurement configuration
   use_range: true  # Enable range measurements for better accuracy
