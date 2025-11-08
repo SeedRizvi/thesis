@@ -1,6 +1,15 @@
 auxdata/
-
 orbDetHOUSE/
+to_delete/
+*temp*.yml
+
+# Ignore all plots except specific ones
+# plots/*
+# !plots/combined.png
+# !plots/fgo_results_full.png
+
+# # Ignore all output files
+# out/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -210,13 +219,3 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-to_delete/
-*temp*.yml
-
-# Ignore all plots except specific ones
-plots/*
-!plots/combined.png
-!plots/fgo_results_full.png
-
-# # Ignore all output files
-# out/*
