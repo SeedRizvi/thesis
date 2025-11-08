@@ -456,7 +456,8 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax_pos.set_xlabel('Time (minutes)')
     ax_pos.set_ylabel('Position Error (m)')
     ax_pos.set_title('Total Position Error')
-    ax_pos.xaxis.set_major_locator(plt.MultipleLocator(25))
+    if len(truth) < 50:
+        ax_pos.xaxis.set_major_locator(plt.MultipleLocator(25))
     ax_pos.legend()
     ax_pos.grid(True, alpha=0.3)
 
@@ -468,11 +469,12 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax_vel.set_xlabel('Time (minutes)')
     ax_vel.set_ylabel('Velocity Error (mm/s)')
     ax_vel.set_title('Total Velocity Error')
-    ax_vel.xaxis.set_major_locator(plt.MultipleLocator(25))
+    if len(truth) < 50:
+        ax_vel.xaxis.set_major_locator(plt.MultipleLocator(25))
     ax_vel.legend()
     ax_vel.grid(True, alpha=0.3)
 
-    plt.suptitle(f'Total Errors - Measurements: {meas_type}', fontsize=14, fontweight='bold')
+    plt.suptitle(f'Total Errors Using Measurements: {meas_type}', fontsize=14, fontweight='bold')
     plt.tight_layout()
 
     # Save second figure with _errors suffix
@@ -512,11 +514,11 @@ if __name__ == '__main__':
     )
     
     # Generate plots
-    save_name = './plots/fgo_results_full.png' if results['use_range'] else './plots/fgo_results_angular.png'
+    save_name = './plots/fgo_results.png' if results['use_range'] else './plots/fgo_results_angular.png'
     plot_fgo_results(results, save_path=save_name)
     
     # Save results
-    save_data = './out/fgo_results_full.npz' if results['use_range'] else './out/fgo_results_angular.npz'
+    save_data = './out/fgo_results.npz' if results['use_range'] else './out/fgo_results_angular.npz'
     np.savez(save_data,
              truth=results['truth'],
              estimated=results['estimated'],
