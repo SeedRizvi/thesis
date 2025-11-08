@@ -144,7 +144,7 @@ ground_stations:
 
 fgo_parameters:
   use_range: true
-  measurement_noise_deg: 0.01
+  measurement_noise_deg: 0.00278
   range_noise_m: 100.0
   process_noise_position: 100.0
   process_noise_velocity: 0.01
