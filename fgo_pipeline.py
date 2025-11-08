@@ -331,6 +331,7 @@ def run_fgo_with_propagator(config_path,
         'truth': truth_states,
         'estimated': fgo.states,
         'measurements': measurements,
+        'delta_v': delta_v,
         'errors': errors,
         'pos_errors': pos_errors,
         'vel_errors': vel_errors,
@@ -349,6 +350,9 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     errors = results['errors']
     pos_errors = results['pos_errors']
     vel_errors = results['vel_errors']
+    delta_v = results.get('delta_v')
+    if delta_v is None:
+        delta_v = [0.0, 0.0, 0.0]
     use_range = results.get('use_range', False)
     
     fig = plt.figure(figsize=(18, 12))
@@ -415,6 +419,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax5.set_xlabel('Time (minutes)')
     ax5.set_ylabel('Position Error (m)')
     ax5.set_title('Total Position Error')
+    ax5.xaxis.set_major_locator(plt.MultipleLocator(50))
     ax5.legend()
     ax5.grid(True, alpha=0.3)
 
@@ -426,6 +431,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax6.set_xlabel('Time (minutes)')
     ax6.set_ylabel('Velocity Error (mm/s)')
     ax6.set_title('Total Velocity Error')
+    ax6.xaxis.set_major_locator(plt.MultipleLocator(50))
     ax6.legend()
     ax6.grid(True, alpha=0.3)
 
@@ -442,6 +448,11 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     ax8.axis('off')
     stats_text = f"""
     Measurement Type: {meas_type}
+
+    Delta-V Manoeuvre:
+      X: {delta_v[0]} m/s
+      Y: {delta_v[1]} m/s
+      Z: {delta_v[2]} m/s
     
     Position Errors:
       RMS: {np.sqrt(np.mean(pos_errors**2)):.2f} m
@@ -513,4 +524,4 @@ if __name__ == '__main__':
     
     print(f"\nResults saved to: {save_data}")
     
-    plt.show()
+    # plt.show()
