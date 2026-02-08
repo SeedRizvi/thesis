@@ -24,7 +24,7 @@ My FGO-based Impulsive Manoeuvre Estimation thesis project.
 
 ## Installation Instructions
 
-**Note**: These installation instructions are for WSL/Linux machines only.
+**Note**: These installation instructions are for Linux machines (native or WSL).
 
 ### Initial Setup (Common for Both Options)
 
@@ -42,26 +42,43 @@ cd thesis
 git clone -b python_wrapper_propagator https://github.com/YangDrYang/orbDetHOUSE.git
 ```
 
-**3. Python dependencies**
+**3. Install build dependencies**
+
+*Ubuntu/WSL:*
 ```bash
+sudo apt install libeigen3-dev libyaml-cpp-dev
 pip install pybind11
 ```
+
+*Arch Linux:*
+
+If using Arch Linux, you'll need to update `makefile_py_wsl` in `orbDetHOUSE` to use C++20 instead of C++11, i.e. `--std=c++20` in Line 17 of `makefile_py_wsl`. 
+```bash
+sudo pacman -S eigen pybind11 yaml-cpp
+```
+
 
 **4. Compile orbDetHOUSE**
 ```bash
 cd orbDetHOUSE/
 make -f makefile_py_wsl clean
-make -f makefile_py_wsl # see Step 4 if this fails
+make -f makefile_py_wsl
 python3 pyscripts/test_orbit_propagator_wrapper_wsl.py  # Test installation
 cd ..
 ```
 
+**5. Create virtual environment and install Python dependencies**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install "numpy<2" pandas matplotlib pyyaml scipy
+```
 
 ---
 
 ### Option 1: Automated Setup (Recommended)
 
-**4. Run Setup Script**
+**6. Run Setup Script**
 ```bash
 python setup_orbdethouse.py
 ```
@@ -71,12 +88,7 @@ This script will automatically:
 - Verify the compiled Python wrapper exists
 - Confirm setup completion
 
-**5. Install Python Dependencies**
-```bash
-pip install "numpy<2" pandas matplotlib pyyaml scipy
-```
-
-**6. Run Factor Graph Optimisation**
+**7. Run Factor Graph Optimisation**
 ```bash
 python fgo_pipeline.py
 ```
@@ -85,37 +97,38 @@ python fgo_pipeline.py
 
 ### Option 2: Manual Installation
 
-**4. Copy Required Data Files**
+**6. Copy Required Data Files**
 ```bash
 cp -r orbDetHOUSE/auxdata/ ./auxdata/
 ```
 
-**5. Verify Compiled Wrapper**
+**7. Verify Compiled Wrapper**
 ```bash
 ls orbDetHOUSE/wsllib/orbit_propagator_wrapper.so
 ```
 
-If the file doesn't exist, return to step 3.
+If the file doesn't exist, return to step 4.
 
-**6. Install Python Dependencies**
-```bash
-pip install "numpy<2" pandas matplotlib pyyaml scipy
-```
-
-**7. Run Factor Graph Optimisation**
+**8. Run Factor Graph Optimisation**
 ```bash
 python fgo_pipeline.py
 ```
 
 ## Dependencies
 
+### Build dependencies (for orbDetHOUSE compilation)
+- Eigen (3.x or 5.x)
+- yaml-cpp
+- pybind11
+
+### Python dependencies
 - [orbDetHOUSE](https://github.com/YangDrYang/orbDetHOUSE/tree/python_wrapper_propagator) - C++ orbit propagator
 - Python 3.8+
 - numpy<2 (for matplotlib compatibility)
 - pandas
 - matplotlib
 - pyyaml
-- pybind11 (for orbDetHOUSE compilation)
+- scipy
 
 ## Usage
 
