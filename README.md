@@ -42,14 +42,20 @@ cd thesis
 git clone -b python_wrapper_propagator https://github.com/YangDrYang/orbDetHOUSE.git
 ```
 
-**3. Compile orbDetHOUSE**
+**3. Python dependencies**
+```bash
+pip install pybind11
+```
+
+**4. Compile orbDetHOUSE**
 ```bash
 cd orbDetHOUSE/
 make -f makefile_py_wsl clean
-make -f makefile_py_wsl
+make -f makefile_py_wsl # see Step 4 if this fails
 python3 pyscripts/test_orbit_propagator_wrapper_wsl.py  # Test installation
 cd ..
 ```
+
 
 ---
 
