@@ -61,12 +61,8 @@ class SatelliteOrbitFGO:
         self.N = len(meas) // (self.n_stations * self.meas_per_station)
         self.dt = dt
         
-        if self.dt > 1:
-            self.prop_dt = self.dt / ceil(self.dt)
-            self.n_timesteps = int(ceil(self.dt))
-        else:
-            self.prop_dt = self.dt
-            self.n_timesteps = 1
+        self.prop_dt = self.dt
+        self.n_timesteps = 1
 
         self.GE = 3.986004418e14
         self.J2 = 1.08262668e-3
@@ -97,31 +93,35 @@ class SatelliteOrbitFGO:
         for i in range(1, self.N):
             self.states[i] = self.prop_one_timestep(self.states[i-1])
 
+    def orbital_dynamics(self, state):
+        r = state[:3]
+        v = state[3:]
+        r_norm = la.norm(r)
+
+        a_2body = -self.GE / (r_norm**3) * r
+
+        z2 = r[2]**2
+        r2 = r_norm**2
+        factor = 1.5 * self.J2 * self.GE * (self.R_earth**2) / (r_norm**5)
+        a_J2 = factor * np.array([
+            r[0] * (5 * z2 / r2 - 1),
+            r[1] * (5 * z2 / r2 - 1),
+            r[2] * (5 * z2 / r2 - 3)
+        ])
+
+        a_total = a_2body + a_J2
+        return np.concatenate([v, a_total])
+
     def prop_one_timestep(self, state):
+        """Propagate state by one timestep using RK4 integration."""
         going_out = state.copy()
+        dt = self.prop_dt
         for _ in range(self.n_timesteps):
-            r = going_out[:3]
-            v = going_out[3:]
-            r_norm = la.norm(r)
-            
-            a_2body = -self.GE / (r_norm**3) * r
-            
-            z2 = r[2]**2
-            r2 = r_norm**2
-            factor = 1.5 * self.J2 * self.GE * (self.R_earth**2) / (r_norm**5)
-            a_J2 = factor * np.array([
-                r[0] * (5 * z2 / r2 - 1),
-                r[1] * (5 * z2 / r2 - 1),
-                r[2] * (5 * z2 / r2 - 3)
-            ])
-            
-            a_total = a_2body + a_J2
-            
-            v_new = v + a_total * self.prop_dt
-            r_new = r + v * self.prop_dt + 0.5 * a_total * (self.prop_dt**2)
-            
-            going_out = np.concatenate([r_new, v_new])
-        
+            k1 = self.orbital_dynamics(going_out)
+            k2 = self.orbital_dynamics(going_out + 0.5 * dt * k1)
+            k3 = self.orbital_dynamics(going_out + 0.5 * dt * k2)
+            k4 = self.orbital_dynamics(going_out + dt * k3)
+            going_out = going_out + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
         return going_out
 
     def state_idx(self, i: int) -> int:
