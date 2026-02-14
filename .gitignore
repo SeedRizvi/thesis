@@ -5,12 +5,11 @@ to_delete/
 
 # Ignore all output files
 out/*
-!out/fgo_truth.csv
-!out/fgo_results.npz
+# !out/fgo_truth.csv
+# !out/fgo_results.npz
+
 # Ignore all plots except specific ones
-# plots/*
-# !plots/combined.png
-# !plots/fgo_results_full.png
+plots/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
