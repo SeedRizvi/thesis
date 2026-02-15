@@ -1,3 +1,2 @@
 - Remove fallback data generated if Propagator fails
 - Remove default ground stations from pipeline?
-- Fix scale on 3D Trajectory plot (Z axis makes plot look like inclination of 45deg)
