@@ -2,6 +2,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import numpy as np
 import scipy.linalg as la
+from scipy.integrate import solve_ivp
 from math import pi, sqrt, ceil, atan2, sin, cos
 import matplotlib.pyplot as plt
 
@@ -113,16 +114,16 @@ class SatelliteOrbitFGO:
         return np.concatenate([v, a_total])
 
     def prop_one_timestep(self, state):
-        """Propagate state by one timestep using RK4 integration."""
-        going_out = state.copy()
-        dt = self.prop_dt
-        for _ in range(self.n_timesteps):
-            k1 = self.orbital_dynamics(going_out)
-            k2 = self.orbital_dynamics(going_out + 0.5 * dt * k1)
-            k3 = self.orbital_dynamics(going_out + 0.5 * dt * k2)
-            k4 = self.orbital_dynamics(going_out + dt * k3)
-            going_out = going_out + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
-        return going_out
+        """Propagate state by one timestep using RK45 integration (scipy)."""
+        sol = solve_ivp(
+            lambda t, y: self.orbital_dynamics(y),
+            [0, self.dt],
+            state,
+            method='RK45',
+            rtol=1e-10,
+            atol=1e-12
+        )
+        return sol.y[:, -1]
 
     def state_idx(self, i: int) -> int:
         return 6 * i
