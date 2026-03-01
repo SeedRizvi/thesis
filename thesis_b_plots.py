@@ -43,9 +43,9 @@ def run_fgo_and_save_plot(config_file, output_name):
 
         if os.path.exists(source):
             shutil.move(source, destination)
-            print(f"✓ Saved main plot to: {destination}")
+            print(f"+ Saved main plot to: {destination}")
         else:
-            print(f"✗ Warning: Expected plot not found at {source}")
+            print(f"- Warning: Expected plot not found at {source}")
 
         # Rename the errors plot
         source_errors = "plots/fgo_results_errors.png"
@@ -54,12 +54,12 @@ def run_fgo_and_save_plot(config_file, output_name):
 
         if os.path.exists(source_errors):
             shutil.move(source_errors, destination_errors)
-            print(f"✓ Saved errors plot to: {destination_errors}")
+            print(f"+ Saved errors plot to: {destination_errors}")
         else:
-            print(f"✗ Warning: Expected errors plot not found at {source_errors}")
+            print(f"- Warning: Expected errors plot not found at {source_errors}")
 
     except subprocess.CalledProcessError as e:
-        print(f"✗ Error running {config_file}:")
+        print(f"- Error running {config_file}:")
         print(e.stderr)
         return False
 
@@ -92,16 +92,16 @@ def main():
         # Check main plot
         plot_path = f"plots/{output_name}"
         if os.path.exists(plot_path):
-            print(f"  ✓ {plot_path}")
+            print(f"  + {plot_path}")
         else:
-            print(f"  ✗ {plot_path} (missing)")
+            print(f"  - {plot_path} (missing)")
 
         # Check errors plot
         errors_path = f"plots/{output_name.replace('.png', '_errors.png')}"
         if os.path.exists(errors_path):
-            print(f"  ✓ {errors_path}")
+            print(f"  + {errors_path}")
         else:
-            print(f"  ✗ {errors_path} (missing)")
+            print(f"  - {errors_path} (missing)")
     print("=" * 70)
 
 if __name__ == "__main__":

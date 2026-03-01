@@ -28,7 +28,7 @@ def setup_orbdethouse_dependencies(orbdethouse_path="orbDetHOUSE"):
     
     print(f"Copying {source_auxdata} -> {dest_auxdata}/")
     shutil.copytree(source_auxdata, dest_auxdata)
-    print("✓ auxdata copied successfully")
+    print("+ auxdata copied successfully")
     
     # Check for .so file
     so_path = os.path.join(orbdethouse_abs, "wsllib", "orbit_propagator_wrapper.so")
@@ -41,7 +41,7 @@ def setup_orbdethouse_dependencies(orbdethouse_path="orbDetHOUSE"):
         print(f"  cd ..")
         return False
     
-    print("✓ orbit_propagator_wrapper.so found")
+    print("+ orbit_propagator_wrapper.so found")
     print("\n" + "="*60)
     print("Setup complete! You can now use:")
     print("  from propagator import OrbitPropagator, plot_orbit_3d")

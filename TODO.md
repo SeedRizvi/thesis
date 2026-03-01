@@ -1,2 +1,2 @@
-- Remove fallback data generated if Propagator fails
+- Function docs for SatelliteOrbitFGO class in [Orbit_FGO.py](Orbit_FGO.py)
 - Remove default ground stations from pipeline?
