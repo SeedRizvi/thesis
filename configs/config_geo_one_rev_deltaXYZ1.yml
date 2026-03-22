@@ -99,8 +99,8 @@ fgo_parameters:
 
 manoeuvre_parameters:
   # Manoeuvre Delta-V: [X, Y, Z] (m/s)
-  delta_v: [0.0, 0.0, 5.0]
+  delta_v: [1.0, 1.0, 1.0]
   # Post-Manoeuvre Propagation Duration
-  pm_duration: 0.15  # Duration in days (0.15 days = 3.6 hours)
+  pm_duration: 0.85  # Duration in days (0.15 days = 3.6 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.5     # Initial delta-v guess error std dev (m/s)
