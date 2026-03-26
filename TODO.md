@@ -1,2 +1,5 @@
 - Function docs for SatelliteOrbitFGO class in [Orbit_FGO.py](Orbit_FGO.py)
 - Remove default ground stations from pipeline?
+- recheck whats the point of eps = 1e-4 in F_mat
+- recheck what is add_delta() for
+- Add dot on combined plot for when manoeuvre occurred
