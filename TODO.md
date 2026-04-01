@@ -3,3 +3,4 @@
 - recheck whats the point of eps = 1e-4 in F_mat
 - recheck what is add_delta() for
 - Add dot on combined plot for when manoeuvre occurred
+- Add epoch estimation into manoeuvre
