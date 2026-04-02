@@ -104,10 +104,3 @@ manoeuvre_parameters:
   pm_duration: 0.85  # Duration in days (0.15 days = 3.6 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
-  # TODO: Remove this vvvvvvvvvvvvvvv
-  # dv_prior_sigma: 0.05       # prior uncertainty on delta-v (m/s), smaller = tighter constraint
-  # TODO: Remove this ^^^^^^^^^^^^^^^
-  # q_tightening_factor: 10    # multiply S_Q_inv by this near t* (tighter dynamics)
-  # q_tightening_factor: 10 means Q is effectively 100x smaller (factor^2 since it's applied to the square root inverse) for those timesteps (the dynamics must be followed much more tightly)
-  # q_tightening_window: 5     # number of timesteps either side of t* to tighten
-  # q_tightening_window: 5 means the 5 timesteps before and after t* (i.e. +/-5 minutes with dt=60s) get the tighter constraint
