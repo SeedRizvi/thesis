@@ -24,16 +24,16 @@ initial_orbtial_parameters:
 
 propagator_truth_settings:
   # High-fidelity propagation settings
-  earth_gravity_model_order: 20  # Reduced for speed
-  earth_gravity_model_degree: 20
-  third_body_attraction: true
-  third_body_sun: true
-  third_body_moon: true
+  earth_gravity_model_order: 2  # Reduced for speed
+  earth_gravity_model_degree: 2
+  third_body_attraction: false
+  third_body_sun: false
+  third_body_moon: false
   solid_earth_tide: false  # Disabled for simplicity
   ocean_tide_loading: false  # Disabled for simplicity
-  solar_radiation_pressure: true
+  solar_radiation_pressure: false
   atmospheric_drag: false  # Negligible at GEO
-  relativity_effect: true
+  relativity_effect: false  # Disabled for simplicity
   srpCoef: 1.0
   srpArea: 10.0
   dragCoef: 2.0
