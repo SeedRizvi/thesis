@@ -20,13 +20,22 @@ import shutil
 #     ("configs/config_geo_short_deltaZ5.yml", "deltaZ5"),
 #     ("configs/config_geo_short_deltaZ50.yml", "deltaZ50"),
 # ]
+
 configs = [
-    ("configs/config_geo_one_rev_deltaXYZ5.yml", "deltaXYZ5"),
+    # ("configs/config_geo_one_rev_deltaXYZ1.yml", "deltaXYZ1"),
+    # ("configs/config_geo_one_rev_deltaXYZ1_simple.yml", "deltaXYZ1_smaller_stdev"),
 ]
+
+configs = [
+    # ("configs/config_geo_one_rev_deltaXYZ1.yml", "deltaXYZ1"),
+    ("configs/config_geo_one_rev_deltaXYZ1_simple.yml", "deltaZ1"),
+]
+
+# Smaller stddev -> from 0.5 to 0.01 m/s
 
 # Two modes to run
 modes = [
-    {"flag": "--no-gaussian", "suffix": "legacy",   "label": "Legacy (no estimation)"},
+    # {"flag": "--no-gaussian", "suffix": "legacy",   "label": "Legacy (no estimation)"},
     {"flag": "",              "suffix": "gaussian",  "label": "Gaussian Estimation"},
 ]
 
