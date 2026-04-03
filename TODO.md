@@ -1,2 +1,8 @@
 - Function docs for SatelliteOrbitFGO class in [Orbit_FGO.py](Orbit_FGO.py)
 - Remove default ground stations from pipeline?
+- recheck whats the point of eps = 1e-4 in F_mat
+- recheck what is add_delta() for
+- Add dot on combined plot for when manoeuvre occurred
+- Add epoch estimation into manoeuvre
+- Remove the Delta V priori/regularisation as it's too hard-coded / bandaid solution
+- Currently knows the time epoch of manoeuvre to adjust Q matrix. ONLY FOR TESTING, we need to remove this!

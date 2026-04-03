@@ -145,7 +145,9 @@ def load_config_parameters(config_path):
         'initial_vel_error': 1.0,
         'max_iterations': 50,
         'delta_v': None,
-        'pm_duration': 0.15
+        'pm_duration': 0.15,
+        'epsilon': 0.5,
+        'dv_initial_error': 0.5
     }
 
     # Load from config if available
@@ -165,6 +167,8 @@ def load_config_parameters(config_path):
         manoeuvre_params = config['manoeuvre_parameters']
         params['delta_v'] = manoeuvre_params.get('delta_v', None)
         params['pm_duration'] = manoeuvre_params.get('pm_duration', 0.15)
+        params['epsilon'] = manoeuvre_params.get('epsilon', 0.5)
+        params['dv_initial_error'] = manoeuvre_params.get('dv_initial_error', 0.5)
 
     # Load ground stations if available
     ground_stations = None
@@ -183,7 +187,8 @@ def run_fgo_with_propagator(config_path,
                            use_range=None,
                            max_iterations=None,
                            delta_v=None,
-                           verbose=True):
+                           verbose=True,
+                           use_gaussian_estimation=True):
     """
     Complete pipeline: propagate orbit, simulate measurements, run FGO
 
@@ -193,6 +198,9 @@ def run_fgo_with_propagator(config_path,
         max_iterations: Maximum optimisation iterations (None to load from config)
         delta_v: Delta-v vector [dvx, dvy, dvz] in m/s (None to load from config)
         verbose: Print progress information
+        use_gaussian_estimation: If True, use Gaussian impulse approximation to
+            estimate delta-v within the FGO. If False, use the legacy split-propagation
+            approach (no manoeuvre modelling in FGO).
 
     Returns:
         Dictionary with results
@@ -252,10 +260,11 @@ def run_fgo_with_propagator(config_path,
     from propagator import OrbitPropagator
     prop = OrbitPropagator("orbDetHOUSE")
 
+    first_csv_path = None
     if delta_v is not None:
         # Use propagate_from_state with delta-v manoeuvre
         print("   Propagating with manoeuvre...")
-        _, _, csv_path = prop.propagate_from_state(config_path, delta_v=delta_v, output_file="fgo_truth.csv", duration=duration)
+        first_csv_path, _, csv_path = prop.propagate_from_state(config_path, delta_v=delta_v, output_file="fgo_truth.csv", duration=duration)
     else:
         # Normal propagation without manoeuvre
         csv_path = prop.propagate(config_path, output_file="fgo_truth.csv")
@@ -304,7 +313,31 @@ def run_fgo_with_propagator(config_path,
         print("="*70)
     
     # Step 6: Run FGO
-    fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0, use_range=use_range)
+    manoeuvres = None
+    epsilon = config_params.get('epsilon', 0.5)
+    dv_initial_error = config_params.get('dv_initial_error', 0.5)
+
+    if delta_v is not None and first_csv_path is not None and use_gaussian_estimation:
+        # Determine t_star from pre-manoeuvre propagation
+        df_pre = pd.read_csv(first_csv_path)
+        t_star_true = float(df_pre['tSec'].iloc[-1])
+
+        # Create initial guess with noise
+        dv_true = np.array(delta_v, dtype=float)
+        dv_guess = dv_true + np.random.normal(0, dv_initial_error, 3)
+
+        manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_true}]
+
+        if verbose:
+            print(f"\n   Gaussian Impulse Approximation:")
+            print(f"     t* = {t_star_true:.2f} s (fixed)")
+            print(f"     epsilon = {epsilon} s")
+            print(f"     True delta-v: {dv_true}")
+            print(f"     Initial guess: {dv_guess}")
+            print(f"     Guess error:   {dv_guess - dv_true}")
+
+    fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0,
+                            use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon)
     fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     # Step 7: Compute final errors
@@ -325,8 +358,19 @@ def run_fgo_with_propagator(config_path,
         if not use_range:
             print("\nNote: High position errors are expected with angular-only measurements.")
             print("Enable range measurements for sub-kilometer accuracy.")
-    
-    return {
+
+        # Report manoeuvre estimation errors
+        if manoeuvres is not None and delta_v is not None:
+            dv_true = np.array(delta_v, dtype=float)
+            dv_estimated = fgo.man_params[:3]
+            dv_error = dv_estimated - dv_true
+            print(f"\nManoeuvre Estimation:")
+            print(f"  True delta-v:      [{dv_true[0]:.4f}, {dv_true[1]:.4f}, {dv_true[2]:.4f}] m/s")
+            print(f"  Estimated delta-v: [{dv_estimated[0]:.4f}, {dv_estimated[1]:.4f}, {dv_estimated[2]:.4f}] m/s")
+            print(f"  Error:             [{dv_error[0]:.4f}, {dv_error[1]:.4f}, {dv_error[2]:.4f}] m/s")
+            print(f"  Error norm:        {np.linalg.norm(dv_error):.4f} m/s")
+
+    results = {
         'fgo': fgo,
         'truth': truth_states,
         'estimated': fgo.states,
@@ -340,6 +384,16 @@ def run_fgo_with_propagator(config_path,
         'ground_stations': ground_stations,
         'use_range': use_range
     }
+
+    # Add manoeuvre estimation info to results
+    if manoeuvres is not None and delta_v is not None:
+        dv_true = np.array(delta_v, dtype=float)
+        dv_estimated = fgo.man_params[:3]
+        results['dv_true'] = dv_true
+        results['dv_estimated'] = dv_estimated
+        results['dv_error'] = dv_estimated - dv_true
+
+    return results
 
 
 def plot_fgo_results(results, save_path='fgo_results.png'):
@@ -391,6 +445,17 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     # Summary statistics
     ax2 = fig.add_subplot(2, 4, (3, 4))
     ax2.axis('off')
+    # Build manoeuvre estimation text
+    man_text = ""
+    if 'dv_estimated' in results:
+        dv_est = results['dv_estimated']
+        dv_err = results['dv_error']
+        man_text = f"""
+    Manoeuvre Estimation:
+      Est: [{dv_est[0]:.4f}, {dv_est[1]:.4f}, {dv_est[2]:.4f}]
+      Err: [{dv_err[0]:.4f}, {dv_err[1]:.4f}, {dv_err[2]:.4f}]
+      |Err|: {np.linalg.norm(dv_err):.4f} m/s"""
+
     stats_text = f"""
     Measurement Type: {meas_type}
 
@@ -398,7 +463,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
       X: {delta_v[0]} m/s
       Y: {delta_v[1]} m/s
       Z: {delta_v[2]} m/s
-
+{man_text}
     Position Errors:
       RMS: {np.sqrt(np.mean(pos_errors**2)):.2f} m
       Max: {np.max(pos_errors):.2f} m
@@ -499,6 +564,8 @@ if __name__ == '__main__':
                        help='Delta-v vector in m/s (overrides config file, e.g., --delta_v 10 10 10)')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
+    parser.add_argument('--no-gaussian', dest='use_gaussian', action='store_false', default=True,
+                       help='Disable Gaussian impulse estimation (use legacy split-propagation)')
 
     args = parser.parse_args()
 
@@ -510,7 +577,8 @@ if __name__ == '__main__':
         use_range=args.use_range,
         max_iterations=args.max_iters,
         delta_v=args.delta_v,
-        verbose=not args.quiet
+        verbose=not args.quiet,
+        use_gaussian_estimation=args.use_gaussian
     )
     
     # Generate plots

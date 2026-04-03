@@ -212,6 +212,92 @@ External C++ orbit propagator library
 - **Comprehensive Visualisation**: 7-subplot analysis including trajectory, errors, and statistics
 - **Command-line Interface**: Full control via arguments or config file
 
+## Gaussian Impulse Approximation for Manoeuvre Estimation
+
+### Overview
+Implements the Gaussian Impulse Approximation (Zhang et al., IEEE TAES 2025) to estimate impulsive manoeuvre delta-v within the FGO. Instead of splitting propagation at the manoeuvre boundary, the impulse is modelled as a smooth Gaussian function, making dynamics differentiable and allowing the FGO to estimate delta-v components as optimisation parameters.
+
+### Key Equations
+- **Gaussian impulse** (Eq. 17): `g(t, t*, ε) = (1/(ε√2π)) * exp(-(t-t*)²/(2ε²))`
+- **Modified dynamics** (Eq. 21): `ẋ = f(t,x) + B * Σ Δv_j * g(t, t_j*, ε)` where B=[0₃;I₃]
+- The Gaussian acceleration only enters velocity derivatives
+
+### Implementation Details
+- **Module-level functions**: `gaussian_impulse()`, `gaussian_impulse_dt_star()` in `Orbit_FGO.py`
+- **Constructor**: Accepts `manoeuvres` list (each with `delta_v` and `t_star`) and `epsilon` parameter
+- **Time-aware dynamics**: `orbital_dynamics(state, t=None)` adds Gaussian acceleration when `t` is provided
+- **Adaptive sub-stepping**: Near manoeuvre epochs (within 3σ of t*), `prop_one_timestep` subdivides the 60s step into smaller steps (`epsilon/5`) to resolve the narrow Gaussian pulse
+- **Augmented Jacobian**: `create_L` includes 3 extra columns per manoeuvre for delta-v parameters, computed via finite differences in `F_man_mat`
+- **Augmented state vector**: `add_delta`, `update_state`, `create_y` handle the extended vector `[states | man_params]`
+- **Backward compatibility**: When `manoeuvres=None`, all code paths are identical to the original (no Gaussian terms, no extra columns)
+
+### Current Status
+- **Delta-v estimation**: Working. t* is fixed (known), 3 delta-v components estimated per manoeuvre.
+- **t* estimation**: Not yet implemented. The derivative `gaussian_impulse_dt_star` is available but unused. This is the next major feature.
+
+### Pipeline Integration
+- `fgo_pipeline.py` captures `first_csv_path` from propagation to determine `t_star = df_pre['tSec'].iloc[-1]`
+- Initial delta-v guess: `dv_true + N(0, dv_initial_error)`
+- `use_gaussian_estimation` flag (CLI: `--no-gaussian`) toggles between Gaussian estimation and legacy split-propagation
+- Results include `dv_true`, `dv_estimated`, `dv_error` for post-processing
+
+### Config Parameters (under `manoeuvre_parameters`)
+```yaml
+manoeuvre_parameters:
+  delta_v: [0.0, 0.0, 1.0]     # True delta-v [X, Y, Z] (m/s)
+  pm_duration: 0.85             # Post-manoeuvre propagation duration (days)
+  epsilon: 0.5                  # Gaussian shaping parameter (seconds)
+  dv_initial_error: 0.1         # Initial delta-v guess error std dev (m/s)
+```
+
+## Issues Faced and Resolutions
+
+### 1. False Positive Delta-V in X/Y Components
+**Symptom**: When applying a Z-only manoeuvre (e.g., [0,0,1] m/s), the estimator consistently reported non-zero X and Y delta-v estimates (~0.2 m/s), while Z was estimated accurately.
+
+**Investigation**: Projected the false positive into the RTN (Radial-Tangential-Normal) orbital frame. Found the error was consistently **along-track** regardless of orbital position — it appeared in ECI-X or ECI-Y depending on where in the orbit the manoeuvre occurred (because the along-track direction rotates with the orbit).
+
+**Root cause**: **Weak observability of in-plane delta-v**. The process noise Q_vel was too generous (0.01 m/s), allowing the optimizer to absorb delta-v errors by distributing small per-state velocity corrections across many post-manoeuvre timesteps. Cross-track (Z) delta-v was accurately estimated because a plane change creates a distinctive pattern across all subsequent measurements that process noise corrections cannot mimic.
+
+**Resolution**: Set Q_vel to match actual dynamics model uncertainty. A sensitivity sweep (`sweep_sensitivity.py`) confirmed Q_vel was the dominant bottleneck — reducing it from 0.01 to 0.001 cut the delta-v error from ~0.24 to ~0.11 m/s.
+
+### 2. Determining Appropriate Q_vel
+**Method**: Measured per-step dynamics model error by propagating truth states through the FGO dynamics (two-body+J2) and comparing to the high-fidelity truth trajectory. This isolates the pure model error with no measurement or estimation effects.
+
+**Results**:
+- Full-fidelity truth vs J2-only FGO: mean 0.000347 m/s, max 0.000465 m/s per step
+- Simplified truth (J2+SRP) vs J2-only FGO: ~2.7e-6 m/s per step (from SRP: 4.56e-8 m/s² × 60s)
+
+**Recommendation**: Q_vel = 0.001 m/s provides ~3× margin over measured full-fidelity mismatch. This is the current default for testing.
+
+### 3. Delta-V Error Floor
+The delta-v estimation error (~0.11 m/s with Q_vel=0.001) is a **fixed floor independent of manoeuvre magnitude**. A 50 m/s manoeuvre has the same absolute error as a 1 m/s manoeuvre. This floor is set by measurement noise (10 arcsec angles, 100m range), ground station geometry, and observation cadence — not by the manoeuvre estimation itself.
+
+## Sensitivity Analysis Results
+From `sweep_sensitivity.py` (varying one parameter at a time from baseline):
+
+| Parameter | Impact on delta-v error | Notes |
+|-----------|------------------------|-------|
+| Q_vel (process noise velocity) | **DOMINANT** — 0.0001→0.045, 0.01→0.245 | Must match dynamics model accuracy |
+| Angular noise | Moderate — 1 arcsec→0.07, 36 arcsec→0.13 | 10 arcsec is realistic for testing |
+| Range noise | Mild — relatively flat across 1-500m | Helps orbit accuracy more than delta-v |
+| Q_pos (process noise position) | Negligible — flat at ~0.11 across 1-500m | Delta-v is a velocity quantity |
+| Initial state error | Zero impact — flat at ~0.11 across 10-5000m | Optimizer fully corrects this |
+
+## Diagnostic Tools (Not For Production Use)
+
+### Delta-V Prior Regularisation (`dv_prior_sigma`)
+Adds a Gaussian prior penalty `(1/σ) * (dv_prior - dv_current)` to the cost function, discouraging delta-v estimates far from the initial guess. Implemented as extra rows in `create_L` and `create_y`.
+
+**Finding**: Reduced error from ~0.27 to ~0.20 m/s but hit a floor. The "right" σ depends on knowing how far the initial guess is from truth — not available operationally. **Requires prior knowledge of the manoeuvre to tune effectively.**
+
+### Adaptive Q Matrix Tightening (`q_tightening_factor`, `q_tightening_window`)
+Multiplies `S_Q_inv` by a factor for timesteps within a window of t*, forcing tighter dynamics constraints near the manoeuvre.
+
+**Finding**: The window size dominates (more constrained timesteps = better), the factor barely matters beyond a threshold. With window=20, error dropped to ~0.10 m/s. Confirmed that the number of unconstrained post-manoeuvre states is what allows the optimizer to absorb delta-v errors.
+
+**Both tools require knowledge of the manoeuvre epoch and characteristics to optimise, so they are not suitable for operational use.** They were valuable for diagnosing the observability issue and confirming that Q_vel was the true lever.
+
 ## Notes
 
 - All state vectors are in ECI (Earth-Centred Inertial) frame
@@ -219,3 +305,4 @@ External C++ orbit propagator library
 - Ground station positions specified in geodetic coordinates (lat/lon/alt)
 - Range measurements enabled by default (use `--no-range` to disable)
 - Typical performance: ~100m position RMS with range, ~7km without range
+- Supervisor direction: simplified dynamics (J2 + SRP), no third-body perturbations needed
