@@ -147,7 +147,8 @@ def load_config_parameters(config_path):
         'delta_v': None,
         'pm_duration': 0.15,
         'epsilon': 0.5,
-        'dv_initial_error': 0.5
+        'dv_initial_error': 0.5,
+        't_star_initial_error': 60.0
     }
 
     # Load from config if available
@@ -169,6 +170,7 @@ def load_config_parameters(config_path):
         params['pm_duration'] = manoeuvre_params.get('pm_duration', 0.15)
         params['epsilon'] = manoeuvre_params.get('epsilon', 0.5)
         params['dv_initial_error'] = manoeuvre_params.get('dv_initial_error', 0.5)
+        params['t_star_initial_error'] = manoeuvre_params.get('t_star_initial_error', 60.0)
 
     # Load ground stations if available
     ground_stations = None
@@ -317,24 +319,29 @@ def run_fgo_with_propagator(config_path,
     epsilon = config_params.get('epsilon', 0.5)
     dv_initial_error = config_params.get('dv_initial_error', 0.5)
 
+    t_star_true = None
     if delta_v is not None and first_csv_path is not None and use_gaussian_estimation:
         # Determine t_star from pre-manoeuvre propagation
         df_pre = pd.read_csv(first_csv_path)
         t_star_true = float(df_pre['tSec'].iloc[-1])
 
-        # Create initial guess with noise
+        # Create initial guesses with noise
         dv_true = np.array(delta_v, dtype=float)
         dv_guess = dv_true + np.random.normal(0, dv_initial_error, 3)
 
-        manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_true}]
+        t_star_initial_error = config_params.get('t_star_initial_error', 60.0)
+        t_star_guess = t_star_true + np.random.normal(0, t_star_initial_error)
+
+        manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
 
         if verbose:
             print(f"\n   Gaussian Impulse Approximation:")
-            print(f"     t* = {t_star_true:.2f} s (fixed)")
             print(f"     epsilon = {epsilon} s")
             print(f"     True delta-v: {dv_true}")
             print(f"     Initial guess: {dv_guess}")
             print(f"     Guess error:   {dv_guess - dv_true}")
+            print(f"     t* true  = {t_star_true:.2f} s")
+            print(f"     t* guess = {t_star_guess:.2f} s (error: {t_star_guess - t_star_true:.2f} s)")
 
     fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0,
                             use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon)
@@ -362,13 +369,19 @@ def run_fgo_with_propagator(config_path,
         # Report manoeuvre estimation errors
         if manoeuvres is not None and delta_v is not None:
             dv_true = np.array(delta_v, dtype=float)
-            dv_estimated = fgo.man_params[:3]
+            dv_estimated = fgo.man_params[0:3]
             dv_error = dv_estimated - dv_true
             print(f"\nManoeuvre Estimation:")
             print(f"  True delta-v:      [{dv_true[0]:.4f}, {dv_true[1]:.4f}, {dv_true[2]:.4f}] m/s")
             print(f"  Estimated delta-v: [{dv_estimated[0]:.4f}, {dv_estimated[1]:.4f}, {dv_estimated[2]:.4f}] m/s")
             print(f"  Error:             [{dv_error[0]:.4f}, {dv_error[1]:.4f}, {dv_error[2]:.4f}] m/s")
             print(f"  Error norm:        {np.linalg.norm(dv_error):.4f} m/s")
+            if t_star_true is not None:
+                t_star_estimated = fgo.man_params[3]
+                t_star_error = t_star_estimated - t_star_true
+                print(f"  True t*:           {t_star_true:.2f} s")
+                print(f"  Estimated t*:      {t_star_estimated:.2f} s")
+                print(f"  t* error:          {t_star_error:.2f} s")
 
     results = {
         'fgo': fgo,
@@ -388,10 +401,15 @@ def run_fgo_with_propagator(config_path,
     # Add manoeuvre estimation info to results
     if manoeuvres is not None and delta_v is not None:
         dv_true = np.array(delta_v, dtype=float)
-        dv_estimated = fgo.man_params[:3]
+        dv_estimated = fgo.man_params[0:3]
         results['dv_true'] = dv_true
         results['dv_estimated'] = dv_estimated
         results['dv_error'] = dv_estimated - dv_true
+        if t_star_true is not None:
+            t_star_estimated = fgo.man_params[3]
+            results['t_star_true'] = t_star_true
+            results['t_star_estimated'] = t_star_estimated
+            results['t_star_error'] = t_star_estimated - t_star_true
 
     return results
 
@@ -455,6 +473,8 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
       Est: [{dv_est[0]:.4f}, {dv_est[1]:.4f}, {dv_est[2]:.4f}]
       Err: [{dv_err[0]:.4f}, {dv_err[1]:.4f}, {dv_err[2]:.4f}]
       |Err|: {np.linalg.norm(dv_err):.4f} m/s"""
+        if 't_star_error' in results:
+            man_text += f"\n      t* err: {results['t_star_error']:.2f} s"
 
     stats_text = f"""
     Measurement Type: {meas_type}
