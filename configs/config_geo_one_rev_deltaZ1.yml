@@ -103,4 +103,5 @@ manoeuvre_parameters:
   # Post-Manoeuvre Propagation Duration
   pm_duration: 0.85  # Duration in days (0.15 days = 3.6 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
-  dv_initial_error: 0.5     # Initial delta-v guess error std dev (m/s)
+  dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
+  t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)

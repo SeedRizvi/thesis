@@ -86,8 +86,8 @@ fgo_parameters:
   range_noise_m: 100.0  # Range measurement noise in metres
   
   # Process noise (dynamics uncertainty)
-  process_noise_position: 100.0  # Position process noise (m)
-  process_noise_velocity: 0.001   # Velocity process noise (m/s)
+  process_noise_position: 100  # Position process noise (m)
+  process_noise_velocity: 0.000046   # Velocity process noise (m/s)
   
   # Initial state errors (for testing)
   initial_position_error: 1000.0  # Initial position error std dev (m)
@@ -99,8 +99,9 @@ fgo_parameters:
 
 manoeuvre_parameters:
   # Manoeuvre Delta-V: [X, Y, Z] (m/s)
-  delta_v: [0.0, 0.0, 0.0]
+  delta_v: [1.0, 1.0, 1.0]
   # Post-Manoeuvre Propagation Duration
   pm_duration: 0.85  # Duration in days (0.15 days = 3.6 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
+  t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)
