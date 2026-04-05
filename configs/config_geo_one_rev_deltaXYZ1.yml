@@ -24,8 +24,8 @@ initial_orbtial_parameters:
 
 propagator_truth_settings:
   # High-fidelity propagation settings
-  earth_gravity_model_order: 2  # Reduced for speed
-  earth_gravity_model_degree: 2
+  earth_gravity_model_order: 20  # Reduced for speed
+  earth_gravity_model_degree: 20
   third_body_attraction: true
   third_body_sun: true
   third_body_moon: true
@@ -101,7 +101,7 @@ manoeuvre_parameters:
   # Manoeuvre Delta-V: [X, Y, Z] (m/s)
   delta_v: [1.0, 1.0, 1.0]
   # Post-Manoeuvre Propagation Duration
-  pm_duration: 0.85  # Duration in days (0.15 days = 3.6 hours)
+  pm_duration: 0.85  # Duration in days (0.85 days = 20.4 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.5     # Initial delta-v guess error std dev (m/s)
-  t_star_initial_error: 60.0  # Initial t* guess error std dev (seconds)
+  t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)
