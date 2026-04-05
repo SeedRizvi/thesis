@@ -3,10 +3,9 @@ orbDetHOUSE/
 to_delete/
 *temp*.yml
 
-# Ignore all output files
+# Ignore all output files but keep the folder
 out/*
-# !out/fgo_truth.csv
-# !out/fgo_results.npz
+!out/.gitkeep
 
 # Ignore all plots except specific ones
 plots/*
