@@ -437,6 +437,12 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
              'r-', linewidth=2, label='Truth')
     ax1.plot(estimated[:, 0]/1e3, estimated[:, 1]/1e3, estimated[:, 2]/1e3,
              'b--', linewidth=1, alpha=0.7, label='Estimated')
+    ax1.scatter(*truth[0, :3]/1e3, color='green', s=80, zorder=5, label='Start')
+    ax1.scatter(*truth[-1, :3]/1e3, color='black', s=80, zorder=5, label='End')
+    t_star_true_plot = results.get('t_star_true')
+    if t_star_true_plot is not None:
+        man_idx = min(round(t_star_true_plot / results['dt']), len(truth) - 1)
+        ax1.scatter(*truth[man_idx, :3]/1e3, color='orange', s=120, marker='*', zorder=5, label='Manoeuvre')
     ax1.set_xlabel('X (km)')
     ax1.set_ylabel('Y (km)')
     ax1.set_zlabel('Z (km)')
