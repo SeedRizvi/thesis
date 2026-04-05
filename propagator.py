@@ -170,9 +170,12 @@ print("SUCCESS")
         plot_orbit_3d(second_output,
                      output_file="plots/post_manouevre.png",
                      title="Second Propagation (After Delta-V)")
+        # Manoeuvre occurs at the join: last row of df1 in the combined frame.
+        manoeuvre_idx = len(df1) - 1
         plot_orbit_3d(combined_output,
                      output_file="plots/combined.png",
-                     title="Combined Propagation (t0 → t1 → t2)")
+                     title="Combined Propagation (t0 → t1 → t2)",
+                     manoeuvre_idx=manoeuvre_idx)
 
         # Clean up temp config
         if os.path.exists(temp_config):
@@ -183,7 +186,8 @@ print("SUCCESS")
         return first_output, second_output, combined_output
 
 
-def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
+def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory",
+                  manoeuvre_idx=None):
     """
     Plot 3D orbital trajectory from propagation results.
 
@@ -191,6 +195,8 @@ def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
         csv_file: Path to CSV file with orbit data
         output_file: Path to save plot. If None, displays plot
         title: Plot title
+        manoeuvre_idx: Optional row index where a manoeuvre occurred; marked
+            with an orange star on the trajectory.
     """
     df = pd.read_csv(csv_file)
 
@@ -206,6 +212,9 @@ def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory"):
                color='green', s=50, label='Start')
     ax.scatter(x_km[-1], y_km[-1], z_km[-1],
                color='red', s=50, label='End')
+    if manoeuvre_idx is not None and 0 <= manoeuvre_idx < len(x_km):
+        ax.scatter(x_km[manoeuvre_idx], y_km[manoeuvre_idx], z_km[manoeuvre_idx],
+                   color='orange', s=120, marker='*', zorder=5, label='Manoeuvre')
 
     ax.set_xlabel('X (km)')
     ax.set_ylabel('Y (km)')
