@@ -220,6 +220,10 @@ Implements the Gaussian Impulse Approximation (Zhang et al., IEEE TAES 2025) to 
 ### Key Equations
 - **Gaussian impulse** (Eq. 17): `g(t, t*, ε) = (1/(ε√2π)) * exp(-(t-t*)²/(2ε²))`
 - **Modified dynamics** (Eq. 21): `ẋ = f(t,x) + B * Σ Δv_j * g(t, t_j*, ε)` where B=[0₃;I₃]
+- **Manoeuvre partials** (Eqs. 31a-31b):
+  - `∂ã_M/∂Δv = g(t, t*, ε) · I₃` (3×3 diagonal)
+  - `∂ã_M/∂t* = Δv · ∂g/∂t*` where `∂g/∂t* = g · (t - t*) / ε²` (3×1 vector)
+- **Augmented parameter vector** (Eq. 1): `p = [Δv₁, t*₁, ..., ΔvN, t*N] ∈ R^{4N}`
 - The Gaussian acceleration only enters velocity derivatives
 
 ### Implementation Details
@@ -227,19 +231,28 @@ Implements the Gaussian Impulse Approximation (Zhang et al., IEEE TAES 2025) to 
 - **Constructor**: Accepts `manoeuvres` list (each with `delta_v` and `t_star`) and `epsilon` parameter
 - **Time-aware dynamics**: `orbital_dynamics(state, t=None)` adds Gaussian acceleration when `t` is provided
 - **Adaptive sub-stepping**: Near manoeuvre epochs (within 3σ of t*), `prop_one_timestep` subdivides the 60s step into smaller steps (`epsilon/5`) to resolve the narrow Gaussian pulse
-- **Augmented Jacobian**: `create_L` includes 3 extra columns per manoeuvre for delta-v parameters, computed via finite differences in `F_man_mat`
-- **Augmented state vector**: `add_delta`, `update_state`, `create_y` handle the extended vector `[states | man_params]`
+- **Augmented Jacobian**: `create_L` includes 4 extra columns per manoeuvre (3 delta-v + 1 t*), computed via finite differences in `F_man_mat`
+- **Augmented state vector**: `add_delta`, `update_state`, `create_y` handle the extended vector `[states | man_params]` where `man_params` has stride-4 layout
 - **Backward compatibility**: When `manoeuvres=None`, all code paths are identical to the original (no Gaussian terms, no extra columns)
 
 ### Current Status
-- **Delta-v estimation**: Working. t* is fixed (known), 3 delta-v components estimated per manoeuvre.
-- **t* estimation**: Not yet implemented. The derivative `gaussian_impulse_dt_star` is available but unused. This is the next major feature.
+- **Delta-v estimation**: Working. 3 delta-v components estimated per manoeuvre.
+- **t* estimation**: Working. Manoeuvre epoch is jointly estimated with delta-v (4 params per manoeuvre).
+- **Q calibration**: Per-dt calibration methodology established. Q scales as Q_vel ∝ dt, Q_pos ∝ dt².
 
 ### Pipeline Integration
-- `fgo_pipeline.py` captures `first_csv_path` from propagation to determine `t_star = df_pre['tSec'].iloc[-1]`
+- `fgo_pipeline.py` captures `first_csv_path` from propagation to determine `t_star_true = df_pre['tSec'].iloc[-1]`
 - Initial delta-v guess: `dv_true + N(0, dv_initial_error)`
+- Initial t* guess: `t_star_true + N(0, t_star_initial_error)`
 - `use_gaussian_estimation` flag (CLI: `--no-gaussian`) toggles between Gaussian estimation and legacy split-propagation
-- Results include `dv_true`, `dv_estimated`, `dv_error` for post-processing
+- Results include `dv_true`, `dv_estimated`, `dv_error`, `t_star_true`, `t_star_estimated`, `t_star_error`
+
+### Manoeuvre Parameter Layout
+- `man_params` is a flat array with stride-4: `[dvx₀, dvy₀, dvz₀, t*₀, dvx₁, dvy₁, dvz₁, t*₁, ...]`
+- `n_man_params = 4 * n_manoeuvres` (was 3N before t* estimation)
+- `orbital_dynamics` and `_needs_substep` read both dv and t* from `man_params` (not from fixed dict)
+- `F_man_mat` uses parameter-aware finite differences: eps=1e-4 for dv, eps=0.01 for t*
+- Helper methods: `man_dv_col(j)` → `6N + 4j`, `man_tstar_col(j)` → `6N + 4j + 3`
 
 ### Config Parameters (under `manoeuvre_parameters`)
 ```yaml
@@ -248,7 +261,31 @@ manoeuvre_parameters:
   pm_duration: 0.85             # Post-manoeuvre propagation duration (days)
   epsilon: 0.5                  # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1         # Initial delta-v guess error std dev (m/s)
+  t_star_initial_error: 60.0    # Initial t* guess error std dev (seconds)
 ```
+
+### Q Calibration
+Process noise must match the actual per-step dynamics model mismatch. Calibrated by propagating truth states through FGO dynamics and measuring the error.
+
+**Simplified model (J2 only), calibrated values (3x measured mismatch):**
+| dt (s) | Q_vel | Q_pos |
+|--------|-------|-------|
+| 60 | 0.0000137 | 0.000413 |
+| 30 | 0.0000069 | 0.000103 |
+| 10 | 0.0000023 | 0.0000114 |
+
+**Full-fidelity model (third body + SRP), dt=60:** Q_vel ≈ 0.001, Q_pos ≈ 0.031
+
+**Key finding**: Default Q_pos=100 was ~72,000x too loose (σ=10m vs actual mismatch of 0.14mm). Tightening Q is the primary lever for t* estimation accuracy — more impactful than reducing dt alone.
+
+### t* Estimation Accuracy (simplified J2-only model, dv=[1,1,1] m/s)
+| dt (s) | Q_vel | Q_pos | t* error (s) | dv error (m/s) |
+|--------|-------|-------|-------------|----------------|
+| 60 | 0.0000137 | 0.000413 | -11.39 | 0.023 |
+| 30 | 0.0000069 | 0.000103 | 4.08 | 0.033 |
+| 10 | 0.0000023 | 0.0000114 | 1.84 | 0.026 |
+
+Paper reference (Zhang et al.): t* RMSE = 2.86s at dt=10s with batch LSQ.
 
 ## Issues Faced and Resolutions
 

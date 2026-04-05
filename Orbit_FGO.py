@@ -6,6 +6,33 @@ from math import pi, sqrt, ceil, atan2, sin, cos, exp
 import matplotlib.pyplot as plt
 
 
+# -----------------------------------------------------------------------------
+# Finite-difference step sizes for numerical Jacobians
+# -----------------------------------------------------------------------------
+# FD_REL_STEP = sqrt(float64 machine epsilon). The theoretically optimal
+# relative step size for forward differences (balances truncation vs roundoff).
+FD_REL_STEP = 1e-8
+# Floor for state-scaled steps, for components that are near-zero.
+FD_STATE_FLOOR = 1e-6
+# Perturbation for delta-v components in F_man_mat. dv is O(1) m/s, so 1e-4
+# gives ~4 significant digits of FD accuracy.
+FD_DV_STEP = 1e-4
+# Perturbation for t* in F_man_mat. Sized to the Gaussian pulse width
+# `epsilon` (config: manoeuvre_parameters/epsilon), not to t* itself.
+# The FD step must shift the pulse by a measurable fraction of its shape.
+# 0.01 s = 2% of epsilon=0.5s.
+FD_TSTAR_STEP = 0.01
+
+
+def fd_state_step(state_component: float) -> float:
+    """Forward-difference step scaled to a state component's magnitude.
+
+    Returns max(FD_REL_STEP * |x|, FD_STATE_FLOOR). For GEO states this gives
+    ~0.4 m for position (O(1e7) m) and ~3e-5 m/s for velocity (O(1e3) m/s).
+    """
+    return max(FD_REL_STEP * abs(state_component), FD_STATE_FLOOR)
+
+
 def gaussian_impulse(t, t_star, epsilon):
     """Gaussian approximation to Dirac delta (Eq. 17 from Zhang et al.)"""
     return (1.0 / (epsilon * sqrt(2 * pi))) * exp(-(t - t_star)**2 / (2 * epsilon**2))
@@ -109,11 +136,12 @@ class SatelliteOrbitFGO:
         else:
             self.manoeuvres = []
             self.n_manoeuvres = 0
-        self.n_man_params = 3 * self.n_manoeuvres  # 3 delta-v components per manoeuvre
-        # Current delta-v estimates stored as flat array [dvx0, dvy0, dvz0, dvx1, ...]
+        self.n_man_params = 4 * self.n_manoeuvres  # 3 delta-v + 1 t* per manoeuvre
+        # Manoeuvre params stored as flat array [dvx0, dvy0, dvz0, t*0, dvx1, ...]
         self.man_params = np.zeros(self.n_man_params)
         for j, man in enumerate(self.manoeuvres):
-            self.man_params[3*j:3*j+3] = man['delta_v']
+            self.man_params[4*j:4*j+3] = man['delta_v']
+            self.man_params[4*j+3] = man['t_star']
 
         self.create_init_state()
 
@@ -143,8 +171,8 @@ class SatelliteOrbitFGO:
         # Gaussian impulse acceleration (Eq. 21)
         if t is not None and self.n_manoeuvres > 0:
             for j in range(self.n_manoeuvres):
-                dv_j = self.man_params[3*j:3*j+3]
-                t_star_j = self.manoeuvres[j]['t_star']
+                dv_j = self.man_params[4*j:4*j+3]
+                t_star_j = self.man_params[4*j+3]
                 g = gaussian_impulse(t, t_star_j, self.epsilon)
                 a_total += dv_j * g
 
@@ -152,8 +180,8 @@ class SatelliteOrbitFGO:
 
     def _needs_substep(self, t_start, t_end):
         """Check if interval overlaps with any manoeuvre's 3-sigma Gaussian window."""
-        for man in self.manoeuvres:
-            t_star = man['t_star']
+        for j in range(self.n_manoeuvres):
+            t_star = self.man_params[4*j+3]
             window_lo = t_star - 3 * self.epsilon
             window_hi = t_star + 3 * self.epsilon
             if t_start < window_hi and t_end > window_lo:
@@ -262,32 +290,32 @@ class SatelliteOrbitFGO:
 
     def H_mat(self, state, station_idx, t):
         """Compute measurement Jacobian with optional range"""
-        eps = 1e-4
         n_meas = 3 if self.use_range else 2
         H = np.zeros((n_meas, 6))
-        
-        meas0 = self.compute_measurements(state[:3], 
+
+        meas0 = self.compute_measurements(state[:3],
                                          self.ground_stations[station_idx], t)
-        
+
         for j in range(3):  # Only derivatives w.r.t position for measurements
+            eps_j = fd_state_step(state[j])
             state_plus = state.copy()
-            state_plus[j] += eps
-            meas_plus = self.compute_measurements(state_plus[:3], 
+            state_plus[j] += eps_j
+            meas_plus = self.compute_measurements(state_plus[:3],
                                                  self.ground_stations[station_idx], t)
-            
+
             # Azimuth with wrapping
             az_diff = meas_plus[0] - meas0[0]
             if az_diff > pi:
                 az_diff -= 2 * pi
             elif az_diff < -pi:
                 az_diff += 2 * pi
-            
-            H[0, j] = az_diff / eps
-            H[1, j] = (meas_plus[1] - meas0[1]) / eps
-            
+
+            H[0, j] = az_diff / eps_j
+            H[1, j] = (meas_plus[1] - meas0[1]) / eps_j
+
             if self.use_range:
-                H[2, j] = (meas_plus[2] - meas0[2]) / eps
-        
+                H[2, j] = (meas_plus[2] - meas0[2]) / eps_j
+
         return H
 
     def man_param_col_start(self):
@@ -296,22 +324,27 @@ class SatelliteOrbitFGO:
 
     def man_dv_col(self, j):
         """Column index for j-th manoeuvre's delta-v block."""
-        return self.man_param_col_start() + 3 * j
+        return self.man_param_col_start() + 4 * j
+
+    def man_tstar_col(self, j):
+        """Column index for j-th manoeuvre's t* parameter."""
+        return self.man_param_col_start() + 4 * j + 3
 
     def F_man_mat(self, state, t_start):
-        """Jacobian of propagated state w.r.t. manoeuvre delta-v parameters.
+        """Jacobian of propagated state w.r.t. manoeuvre parameters (dv, t*).
 
-        Returns 6 x (3*n_manoeuvres) matrix via finite differences.
+        Returns 6 x (4*n_manoeuvres) matrix via finite differences.
+        Uses different step sizes for delta-v (1e-4 m/s) and t* (0.01 s).
         """
         if self.n_manoeuvres == 0:
             return np.zeros((6, 0))
 
-        eps = 1e-4
         F_man = np.zeros((6, self.n_man_params))
         f0 = self.prop_one_timestep(state, t_start)
 
         saved_params = self.man_params.copy()
         for j in range(self.n_man_params):
+            eps = FD_TSTAR_STEP if j % 4 == 3 else FD_DV_STEP
             self.man_params[j] += eps
             f_plus = self.prop_one_timestep(state, t_start)
             F_man[:, j] = (f_plus - f0) / eps
@@ -320,17 +353,17 @@ class SatelliteOrbitFGO:
         return F_man
 
     def F_mat(self, state, t_start=None):
-        eps = 1e-4
         F = np.zeros((6, 6))
 
         f0 = self.prop_one_timestep(state, t_start)
 
         for j in range(6):
+            eps_j = fd_state_step(state[j])
             state_plus = state.copy()
-            state_plus[j] += eps
+            state_plus[j] += eps_j
             f_plus = self.prop_one_timestep(state_plus, t_start)
 
-            F[:, j] = (f_plus - f0) / eps
+            F[:, j] = (f_plus - f0) / eps_j
 
         return F
 
@@ -466,6 +499,18 @@ class SatelliteOrbitFGO:
             self.man_params += delta_x[self.N*6:self.N*6+self.n_man_params]
 
     def opt(self, max_iters=50, verbose=True):
+        '''
+        Build the Jacobian matrix (L) and residual vector (y) for the current
+        state, solve the regularised normal equations for the best linear step
+        that minimises y, and move in that direction. Repeat until convergence.
+        (Levenberg-Marquardt damped Gauss-Newton with backtracking line search.)
+
+        Backtracking line search: the dynamics are nonlinear, so trying
+        scales 1, 1/2, 1/4, ... exploits the fact that smaller steps sit
+        closer to the linearisation point, where the quadratic model is more
+        accurate. The first scale whose actual cost reduction covers >= 25%
+        of the predicted reduction is accepted.
+        '''
         finished = False
         num_iters = 0
         lambda_reg = 1e-6
@@ -553,9 +598,9 @@ class SatelliteOrbitFGO:
             if self.n_manoeuvres > 0:
                 print(f'\nEstimated Manoeuvre Parameters:')
                 for j in range(self.n_manoeuvres):
-                    dv = self.man_params[3*j:3*j+3]
-                    t_star = self.manoeuvres[j]['t_star']
+                    dv = self.man_params[4*j:4*j+3]
+                    t_star = self.man_params[4*j+3]
                     print(f'  Manoeuvre {j+1}:')
                     print(f'    Delta-v: [{dv[0]:.4f}, {dv[1]:.4f}, {dv[2]:.4f}] m/s')
-                    print(f'    (t* fixed at {t_star:.2f} s)')
+                    print(f'    t* = {t_star:.2f} s (estimated)')
 

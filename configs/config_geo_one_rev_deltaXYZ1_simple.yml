@@ -24,14 +24,14 @@ initial_orbtial_parameters:
 
 propagator_truth_settings:
   # High-fidelity propagation settings
-  earth_gravity_model_order: 20  # Reduced for speed
-  earth_gravity_model_degree: 20
+  earth_gravity_model_order: 2  # Reduced for speed
+  earth_gravity_model_degree: 2
   third_body_attraction: false
   third_body_sun: false
   third_body_moon: false
   solid_earth_tide: false  # Disabled for simplicity
   ocean_tide_loading: false  # Disabled for simplicity
-  solar_radiation_pressure: false
+  solar_radiation_pressure: true
   atmospheric_drag: false  # Negligible at GEO
   relativity_effect: false  # Disabled for simplicity
   srpCoef: 1.0
@@ -86,9 +86,13 @@ fgo_parameters:
   range_noise_m: 100.0  # Range measurement noise in metres
   
   # Process noise (dynamics uncertainty)
-  process_noise_position: 100.0  # Position process noise (m)
-  process_noise_velocity: 0.001   # Velocity process noise (m/s)
-  
+  # ------ Conservative values (10x error margin) ------
+  # process_noise_position: 0.0014  # Position process noise (m)
+  # process_noise_velocity: 0.000046   # Velocity process noise (m/s)
+  # ------ Calibrated values (3x error margin) ------
+  process_noise_position: 0.00042  # Position process noise (m)
+  process_noise_velocity: 0.000014   # Velocity process noise (m/s)
+
   # Initial state errors (for testing)
   initial_position_error: 1000.0  # Initial position error std dev (m)
   initial_velocity_error: 1.0     # Initial velocity error std dev (m/s)
@@ -99,8 +103,9 @@ fgo_parameters:
 
 manoeuvre_parameters:
   # Manoeuvre Delta-V: [X, Y, Z] (m/s)
-  delta_v: [0.0, 0.0, 0.0]
+  delta_v: [1.0, 1.0, 1.0]
   # Post-Manoeuvre Propagation Duration
   pm_duration: 0.85  # Duration in days (0.15 days = 3.6 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
+  t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)

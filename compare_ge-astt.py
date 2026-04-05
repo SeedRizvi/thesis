@@ -27,8 +27,8 @@ configs = [
 ]
 
 configs = [
-    # ("configs/config_geo_one_rev_deltaXYZ1.yml", "deltaXYZ1"),
-    ("configs/config_geo_one_rev_deltaXYZ1_simple.yml", "deltaZ1"),
+    ("configs/config_geo_one_rev_deltaXYZ1.yml", "deltaXYZ1_scaled_eps_refactor"),
+    # ("configs/config_geo_one_rev_deltaXYZ1_simple.yml", "deltaXYZ1_simple_Qvel_0.000046"),
 ]
 
 # Smaller stddev -> from 0.5 to 0.01 m/s
