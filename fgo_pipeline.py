@@ -151,26 +151,26 @@ def load_config_parameters(config_path):
         't_star_initial_error': 60.0
     }
 
-    # Load from config if available
+    # Load from config if available (defaults come from the `params` dict above)
     if 'fgo_parameters' in config:
         fgo_params = config['fgo_parameters']
-        params['use_range'] = fgo_params.get('use_range', True)
-        params['measurement_noise_deg'] = fgo_params.get('measurement_noise_deg', 0.01)
-        params['range_noise_m'] = fgo_params.get('range_noise_m', 100.0)
-        params['process_noise_pos'] = fgo_params.get('process_noise_position', 100.0)
-        params['process_noise_vel'] = fgo_params.get('process_noise_velocity', 0.01)
-        params['initial_pos_error'] = fgo_params.get('initial_position_error', 1000.0)
-        params['initial_vel_error'] = fgo_params.get('initial_velocity_error', 1.0)
-        params['max_iterations'] = fgo_params.get('max_iterations', 50)
+        params['use_range'] = fgo_params.get('use_range', params['use_range'])
+        params['measurement_noise_deg'] = fgo_params.get('measurement_noise_deg', params['measurement_noise_deg'])
+        params['range_noise_m'] = fgo_params.get('range_noise_m', params['range_noise_m'])
+        params['process_noise_pos'] = fgo_params.get('process_noise_position', params['process_noise_pos'])
+        params['process_noise_vel'] = fgo_params.get('process_noise_velocity', params['process_noise_vel'])
+        params['initial_pos_error'] = fgo_params.get('initial_position_error', params['initial_pos_error'])
+        params['initial_vel_error'] = fgo_params.get('initial_velocity_error', params['initial_vel_error'])
+        params['max_iterations'] = fgo_params.get('max_iterations', params['max_iterations'])
 
     # Load manoeuvre parameters if available
     if 'manoeuvre_parameters' in config:
         manoeuvre_params = config['manoeuvre_parameters']
-        params['delta_v'] = manoeuvre_params.get('delta_v', None)
-        params['pm_duration'] = manoeuvre_params.get('pm_duration', 0.15)
-        params['epsilon'] = manoeuvre_params.get('epsilon', 0.5)
-        params['dv_initial_error'] = manoeuvre_params.get('dv_initial_error', 0.5)
-        params['t_star_initial_error'] = manoeuvre_params.get('t_star_initial_error', 60.0)
+        params['delta_v'] = manoeuvre_params.get('delta_v', params['delta_v'])
+        params['pm_duration'] = manoeuvre_params.get('pm_duration', params['pm_duration'])
+        params['epsilon'] = manoeuvre_params.get('epsilon', params['epsilon'])
+        params['dv_initial_error'] = manoeuvre_params.get('dv_initial_error', params['dv_initial_error'])
+        params['t_star_initial_error'] = manoeuvre_params.get('t_star_initial_error', params['t_star_initial_error'])
 
     # Load ground stations if available
     ground_stations = None
@@ -211,19 +211,13 @@ def run_fgo_with_propagator(config_path,
     # Load parameters from config
     config_params, config_stations = load_config_parameters(config_path)
 
-    # Use stations from config file if available, otherwise use defaults
-    if config_stations is not None:
-        ground_stations = config_stations
-    else:
-        # Default ground stations if not defined in config
-        ground_stations = [
-            (np.deg2rad(40.7128), np.deg2rad(-74.0060), 0),   # New York
-            (np.deg2rad(51.5074), np.deg2rad(-0.1278), 0),    # London
-            (np.deg2rad(35.6762), np.deg2rad(139.6503), 0),   # Tokyo
-            (np.deg2rad(-33.8688), np.deg2rad(151.2093), 0),  # Sydney
-            (np.deg2rad(1.3521), np.deg2rad(103.8198), 0),    # Singapore
-            (np.deg2rad(-23.5505), np.deg2rad(-46.6333), 0)   # São Paulo
-        ]
+    # Ground stations must be specified in the config -- no silent defaults.
+    if not config_stations:
+        raise ValueError(
+            f"Config '{config_path}' must define at least one ground station "
+            f"under the 'ground_stations:' key."
+        )
+    ground_stations = config_stations
 
     # Override config with CLI arguments if provided
     use_range = use_range if use_range is not None else config_params['use_range']
