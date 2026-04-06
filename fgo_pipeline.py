@@ -148,7 +148,8 @@ def load_config_parameters(config_path):
         'pm_duration': 0.15,
         'epsilon': 0.5,
         'dv_initial_error': 0.5,
-        't_star_initial_error': 60.0
+        't_star_initial_error': 60.0,
+        'multi_manoeuvres': None,  # list of {'delta_v', 'duration_after'} for multi-manoeuvre configs
     }
 
     # Load from config if available (defaults come from the `params` dict above)
@@ -171,6 +172,8 @@ def load_config_parameters(config_path):
         params['epsilon'] = manoeuvre_params.get('epsilon', params['epsilon'])
         params['dv_initial_error'] = manoeuvre_params.get('dv_initial_error', params['dv_initial_error'])
         params['t_star_initial_error'] = manoeuvre_params.get('t_star_initial_error', params['t_star_initial_error'])
+        # Multi-manoeuvre list (overrides single delta_v path when present).
+        params['multi_manoeuvres'] = manoeuvre_params.get('manoeuvres', params['multi_manoeuvres'])
 
     # Load ground stations if available
     ground_stations = None
@@ -232,7 +235,8 @@ def run_fgo_with_propagator(config_path,
     initial_pos_error = config_params['initial_pos_error']
     initial_vel_error = config_params['initial_vel_error']
     duration = config_params['pm_duration']
-    
+    multi_manoeuvres = config_params['multi_manoeuvres']
+
     if verbose:
         print("="*70)
         print("Factor Graph Optimisation Pipeline")
@@ -243,22 +247,32 @@ def run_fgo_with_propagator(config_path,
         print(f"  Angular noise: {measurement_noise_deg} degrees")
         if use_range:
             print(f"  Range noise: {range_noise_m} metres")
-        if delta_v is not None:
+        if multi_manoeuvres is not None:
+            print(f"  Multi-manoeuvre scenario: {len(multi_manoeuvres)} impulses")
+            for j, m in enumerate(multi_manoeuvres):
+                print(f"    #{j+1}: dv = {m['delta_v']} m/s, duration_after = {m['duration_after']} d")
+        elif delta_v is not None:
             print(f"  Delta-v manoeuvre: {delta_v} m/s")
             print(f"  Post-manoeuvre duration: {duration} days")
-    
+
     # Step 1: Run orbit propagator
     if verbose:
         print("\n1. Running orbit propagator...")
-        if delta_v is not None:
-            print(f"   Applying delta-v: {delta_v} m/s")
 
     from propagator import OrbitPropagator
     prop = OrbitPropagator("orbDetHOUSE")
 
     first_csv_path = None
-    if delta_v is not None:
-        # Use propagate_from_state with delta-v manoeuvre
+    multi_t_stars_true = None
+    multi_dvs_true = None
+    if multi_manoeuvres is not None:
+        # Multi-manoeuvre: chain N+1 propagation segments.
+        _, csv_path, multi_t_stars_true = prop.propagate_multiple_manoeuvres(
+            config_path, multi_manoeuvres, output_file="fgo_truth_multi.csv",
+        )
+        multi_dvs_true = [np.array(m['delta_v'], dtype=float) for m in multi_manoeuvres]
+    elif delta_v is not None:
+        # Single manoeuvre via propagate_from_state.
         print("   Propagating with manoeuvre...")
         first_csv_path, _, csv_path = prop.propagate_from_state(config_path, delta_v=delta_v, output_file="fgo_truth.csv", duration=duration)
     else:
@@ -312,30 +326,39 @@ def run_fgo_with_propagator(config_path,
     manoeuvres = None
     epsilon = config_params.get('epsilon', 0.5)
     dv_initial_error = config_params.get('dv_initial_error', 0.5)
+    t_star_initial_error = config_params.get('t_star_initial_error', 60.0)
 
-    t_star_true = None
-    if delta_v is not None and first_csv_path is not None and use_gaussian_estimation:
-        # Determine t_star from pre-manoeuvre propagation
+    # Unified truth lists regardless of single/multi. Empty when no manoeuvre.
+    dvs_true_list = []
+    t_stars_true_list = []
+    if multi_manoeuvres is not None and use_gaussian_estimation:
+        dvs_true_list = multi_dvs_true
+        t_stars_true_list = list(multi_t_stars_true)
+    elif delta_v is not None and first_csv_path is not None and use_gaussian_estimation:
         df_pre = pd.read_csv(first_csv_path)
-        t_star_true = float(df_pre['tSec'].iloc[-1])
+        dvs_true_list = [np.array(delta_v, dtype=float)]
+        t_stars_true_list = [float(df_pre['tSec'].iloc[-1])]
 
-        # Create initial guesses with noise
-        dv_true = np.array(delta_v, dtype=float)
-        dv_guess = dv_true + np.random.normal(0, dv_initial_error, 3)
+    # Kept for backwards-compatible result dict (single-manoeuvre accessors).
+    t_star_true = t_stars_true_list[0] if t_stars_true_list else None
 
-        t_star_initial_error = config_params.get('t_star_initial_error', 60.0)
-        t_star_guess = t_star_true + np.random.normal(0, t_star_initial_error)
-
-        manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
-
+    if dvs_true_list:
+        # Build FGO manoeuvre list with perturbed initial guesses per manoeuvre.
+        manoeuvres = []
         if verbose:
             print(f"\n   Gaussian Impulse Approximation:")
             print(f"     epsilon = {epsilon} s")
-            print(f"     True delta-v: {dv_true}")
-            print(f"     Initial guess: {dv_guess}")
-            print(f"     Guess error:   {dv_guess - dv_true}")
-            print(f"     t* true  = {t_star_true:.2f} s")
-            print(f"     t* guess = {t_star_guess:.2f} s (error: {t_star_guess - t_star_true:.2f} s)")
+        for j, (dv_true_j, t_star_true_j) in enumerate(zip(dvs_true_list, t_stars_true_list)):
+            dv_guess = dv_true_j + np.random.normal(0, dv_initial_error, 3)
+            t_star_guess = t_star_true_j + np.random.normal(0, t_star_initial_error)
+            manoeuvres.append({'delta_v': dv_guess, 't_star': t_star_guess})
+            if verbose:
+                print(f"     Manoeuvre {j+1}:")
+                print(f"       True dv:  {dv_true_j}")
+                print(f"       dv guess: {dv_guess} (err {dv_guess - dv_true_j})")
+                print(f"       t* true  = {t_star_true_j:.2f} s")
+                print(f"       t* guess = {t_star_guess:.2f} s "
+                      f"(error: {t_star_guess - t_star_true_j:.2f} s)")
 
     fgo = SatelliteOrbitFGO(measurements, R, Q, ground_stations, dt, x0=x0,
                             use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon)
@@ -360,22 +383,22 @@ def run_fgo_with_propagator(config_path,
             print("\nNote: High position errors are expected with angular-only measurements.")
             print("Enable range measurements for sub-kilometer accuracy.")
 
-        # Report manoeuvre estimation errors
-        if manoeuvres is not None and delta_v is not None:
-            dv_true = np.array(delta_v, dtype=float)
-            dv_estimated = fgo.man_params[0:3]
-            dv_error = dv_estimated - dv_true
-            print(f"\nManoeuvre Estimation:")
-            print(f"  True delta-v:      [{dv_true[0]:.4f}, {dv_true[1]:.4f}, {dv_true[2]:.4f}] m/s")
-            print(f"  Estimated delta-v: [{dv_estimated[0]:.4f}, {dv_estimated[1]:.4f}, {dv_estimated[2]:.4f}] m/s")
-            print(f"  Error:             [{dv_error[0]:.4f}, {dv_error[1]:.4f}, {dv_error[2]:.4f}] m/s")
-            print(f"  Error norm:        {np.linalg.norm(dv_error):.4f} m/s")
-            if t_star_true is not None:
-                t_star_estimated = fgo.man_params[3]
-                t_star_error = t_star_estimated - t_star_true
-                print(f"  True t*:           {t_star_true:.2f} s")
-                print(f"  Estimated t*:      {t_star_estimated:.2f} s")
-                print(f"  t* error:          {t_star_error:.2f} s")
+        # Report manoeuvre estimation errors (per-manoeuvre).
+        if manoeuvres is not None and dvs_true_list:
+            print(f"\nManoeuvre Estimation ({len(dvs_true_list)} manoeuvre(s)):")
+            for j, (dv_true_j, t_star_true_j) in enumerate(zip(dvs_true_list, t_stars_true_list)):
+                dv_est_j = fgo.man_params[4*j:4*j+3]
+                dv_err_j = dv_est_j - dv_true_j
+                t_star_est_j = float(fgo.man_params[4*j+3])
+                t_star_err_j = t_star_est_j - t_star_true_j
+                print(f"  Manoeuvre {j+1}:")
+                print(f"    True delta-v:      [{dv_true_j[0]:.4f}, {dv_true_j[1]:.4f}, {dv_true_j[2]:.4f}] m/s")
+                print(f"    Estimated delta-v: [{dv_est_j[0]:.4f}, {dv_est_j[1]:.4f}, {dv_est_j[2]:.4f}] m/s")
+                print(f"    dv error:          [{dv_err_j[0]:.4f}, {dv_err_j[1]:.4f}, {dv_err_j[2]:.4f}] m/s "
+                      f"(|err| {np.linalg.norm(dv_err_j):.4f})")
+                print(f"    True t*:           {t_star_true_j:.2f} s")
+                print(f"    Estimated t*:      {t_star_est_j:.2f} s")
+                print(f"    t* error:          {t_star_err_j:.2f} s")
 
     results = {
         'fgo': fgo,
@@ -392,18 +415,35 @@ def run_fgo_with_propagator(config_path,
         'use_range': use_range
     }
 
-    # Add manoeuvre estimation info to results
-    if manoeuvres is not None and delta_v is not None:
-        dv_true = np.array(delta_v, dtype=float)
-        dv_estimated = fgo.man_params[0:3]
-        results['dv_true'] = dv_true
-        results['dv_estimated'] = dv_estimated
-        results['dv_error'] = dv_estimated - dv_true
-        if t_star_true is not None:
-            t_star_estimated = fgo.man_params[3]
-            results['t_star_true'] = t_star_true
-            results['t_star_estimated'] = t_star_estimated
-            results['t_star_error'] = t_star_estimated - t_star_true
+    # Add manoeuvre estimation info to results.
+    if manoeuvres is not None and dvs_true_list:
+        dvs_estimated_list = []
+        dvs_error_list = []
+        t_stars_estimated_list = []
+        t_stars_error_list = []
+        for j, (dv_true_j, t_star_true_j) in enumerate(zip(dvs_true_list, t_stars_true_list)):
+            dv_est_j = fgo.man_params[4*j:4*j+3].copy()
+            t_star_est_j = float(fgo.man_params[4*j+3])
+            dvs_estimated_list.append(dv_est_j)
+            dvs_error_list.append(dv_est_j - dv_true_j)
+            t_stars_estimated_list.append(t_star_est_j)
+            t_stars_error_list.append(t_star_est_j - t_star_true_j)
+
+        # Lists (length N) for multi-manoeuvre consumers.
+        results['dvs_true'] = dvs_true_list
+        results['dvs_estimated'] = dvs_estimated_list
+        results['dvs_error'] = dvs_error_list
+        results['t_stars_true'] = t_stars_true_list
+        results['t_stars_estimated'] = t_stars_estimated_list
+        results['t_stars_error'] = t_stars_error_list
+
+        # Scalars / single-entry (kept for single-manoeuvre consumers).
+        results['dv_true'] = dvs_true_list[0]
+        results['dv_estimated'] = dvs_estimated_list[0]
+        results['dv_error'] = dvs_error_list[0]
+        results['t_star_true'] = t_stars_true_list[0]
+        results['t_star_estimated'] = t_stars_estimated_list[0]
+        results['t_star_error'] = t_stars_error_list[0]
 
     return results
 
@@ -419,6 +459,7 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     delta_v = results.get('delta_v')
     if delta_v is None:
         delta_v = [0.0, 0.0, 0.0]
+    dvs_true_plot = results.get('dvs_true')
     use_range = results.get('use_range', False)
     
     fig = plt.figure(figsize=(18, 12))
@@ -433,10 +474,13 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
              'b--', linewidth=1, alpha=0.7, label='Estimated')
     ax1.scatter(*truth[0, :3]/1e3, color='green', s=80, zorder=5, label='Start')
     ax1.scatter(*truth[-1, :3]/1e3, color='black', s=80, zorder=5, label='End')
-    t_star_true_plot = results.get('t_star_true')
-    if t_star_true_plot is not None:
-        man_idx = min(round(t_star_true_plot / results['dt']), len(truth) - 1)
-        ax1.scatter(*truth[man_idx, :3]/1e3, color='orange', s=120, marker='*', zorder=5, label='Manoeuvre')
+    t_stars_plot = results.get('t_stars_true') or (
+        [results['t_star_true']] if results.get('t_star_true') is not None else []
+    )
+    for j, t_star in enumerate(t_stars_plot):
+        man_idx = min(round(t_star / results['dt']), len(truth) - 1)
+        label = 'Manoeuvre' if j == 0 else None
+        ax1.scatter(*truth[man_idx, :3]/1e3, color='orange', s=120, marker='*', zorder=5, label=label)
     ax1.set_xlabel('X (km)')
     ax1.set_ylabel('Y (km)')
     ax1.set_zlabel('Z (km)')
@@ -463,26 +507,42 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     # Summary statistics
     ax2 = fig.add_subplot(2, 4, (3, 4))
     ax2.axis('off')
-    # Build manoeuvre estimation text
+    # Build manoeuvre estimation text (single- and multi-manoeuvre aware).
     man_text = ""
-    if 'dv_estimated' in results:
-        dv_est = results['dv_estimated']
-        dv_err = results['dv_error']
-        man_text = f"""
-    Manoeuvre Estimation:
-      Est: [{dv_est[0]:.4f}, {dv_est[1]:.4f}, {dv_est[2]:.4f}]
-      Err: [{dv_err[0]:.4f}, {dv_err[1]:.4f}, {dv_err[2]:.4f}]
-      |Err|: {np.linalg.norm(dv_err):.4f} m/s"""
-        if 't_star_error' in results:
-            man_text += f"\n      t* err: {results['t_star_error']:.2f} s"
+    dvs_true_list = results.get('dvs_true')
+    dvs_est_list = results.get('dvs_estimated')
+    dvs_err_list = results.get('dvs_error')
+    t_stars_err_list = results.get('t_stars_error')
+    if dvs_true_list is not None and dvs_est_list is not None:
+        man_text = "\n    Manoeuvre Estimation:"
+        for j in range(len(dvs_true_list)):
+            dv_true_j = dvs_true_list[j]
+            dv_est_j = dvs_est_list[j]
+            dv_err_j = dvs_err_list[j]
+            man_text += (
+                f"\n      #{j+1}:"
+                f"\n        True: [{dv_true_j[0]:.3f}, {dv_true_j[1]:.3f}, {dv_true_j[2]:.3f}]"
+                f"\n        Est:  [{dv_est_j[0]:.3f}, {dv_est_j[1]:.3f}, {dv_est_j[2]:.3f}]"
+                f"\n        |Err|: {np.linalg.norm(dv_err_j):.4f} m/s"
+            )
+            if t_stars_err_list is not None:
+                man_text += f"\n        t* err: {t_stars_err_list[j]:+.2f} s"
+
+    # Delta-v description: only meaningful for single-manoeuvre legacy path.
+    if dvs_true_list is not None and len(dvs_true_list) > 1:
+        delta_v_desc = f"Delta-V Manoeuvres: {len(dvs_true_list)} (see above)"
+    else:
+        delta_v_desc = (
+            f"Delta-V Manoeuvre:\n"
+            f"      X: {delta_v[0]} m/s\n"
+            f"      Y: {delta_v[1]} m/s\n"
+            f"      Z: {delta_v[2]} m/s"
+        )
 
     stats_text = f"""
     Measurement Type: {meas_type}
 
-    Delta-V Manoeuvre:
-      X: {delta_v[0]} m/s
-      Y: {delta_v[1]} m/s
-      Z: {delta_v[2]} m/s
+    {delta_v_desc}
 {man_text}
     Position Errors:
       RMS: {np.sqrt(np.mean(pos_errors**2)):.2f} m

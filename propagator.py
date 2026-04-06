@@ -185,6 +185,115 @@ print("SUCCESS")
         print("\t-------------------------------------------------")
         return first_output, second_output, combined_output
 
+    def propagate_multiple_manoeuvres(self, config_file, manoeuvres,
+                                       output_file="results_multi.csv"):
+        """
+        Run multi-manoeuvre propagation: chain N+1 propagation segments joined
+        by N instantaneous velocity steps. Intended for N >= 2; use
+        propagate_from_state for the single-manoeuvre case.
+
+        Args:
+            config_file: Template config (first segment uses its MJD window)
+            manoeuvres: list of dicts, each with
+                'delta_v': [dvx, dvy, dvz] m/s applied at end of its segment
+                'duration_after': days to propagate after the impulse
+            output_file: Base output filename
+
+        Returns:
+            Tuple of (segment_csvs, combined_csv, t_star_list)
+              segment_csvs: list of absolute paths to each segment CSV (length N+1)
+              combined_csv: path to the joined CSV
+              t_star_list: list of manoeuvre epochs in combined-time seconds
+        """
+        config_abs = os.path.abspath(config_file)
+        if not os.path.exists(config_abs):
+            raise FileNotFoundError(f"Config not found: {config_abs}")
+
+        n_man = len(manoeuvres)
+        if n_man == 0:
+            raise ValueError("manoeuvres list cannot be empty")
+
+        base = os.path.basename(output_file).replace('.csv', '')
+        combined_filename = f"{base}_combined.csv"
+
+        segment_csvs = []
+        segment_dfs = []
+        t_star_list = []
+
+        # Step 1: propagate first segment using the config's MJD window.
+        print("\t-------------------------------------------------")
+        print(f"\tMulti-manoeuvre: {n_man} manoeuvres, {n_man+1} segments")
+        print(f"\tSegment 1/{n_man+1} (pre-manoeuvre)...")
+        seg_name = f"{base}_seg0.csv"
+        seg_out = self.propagate(config_abs, seg_name)
+        segment_csvs.append(seg_out)
+        segment_dfs.append(pd.read_csv(seg_out))
+
+        # Load template for MJD/state edits per segment.
+        with open(config_abs, 'r') as f:
+            base_config = yaml.safe_load(f)
+        mjd_cursor = base_config['scenario_parameters']['MJD_end']
+
+        # Steps 2..N+1: for each manoeuvre, apply dv to last state and propagate.
+        for j, man in enumerate(manoeuvres):
+            dv = man['delta_v']
+            dur = man['duration_after']
+
+            last_state = segment_dfs[-1].iloc[-1]
+            new_state = [
+                float(last_state['x']),
+                float(last_state['y']),
+                float(last_state['z']),
+                float(last_state['vx']) + dv[0],
+                float(last_state['vy']) + dv[1],
+                float(last_state['vz']) + dv[2],
+            ]
+
+            seg_config = yaml.safe_load(yaml.dump(base_config))
+            seg_config['initial_orbtial_parameters']['initial_state'] = new_state
+            seg_config['scenario_parameters']['MJD_start'] = mjd_cursor
+            seg_config['scenario_parameters']['MJD_end'] = mjd_cursor + dur
+            mjd_cursor += dur
+
+            temp_config = config_abs.replace('.yml', f'_temp_seg{j+1}.yml')
+            with open(temp_config, 'w') as f:
+                yaml.dump(seg_config, f, default_flow_style=False, sort_keys=False)
+
+            print(f"\tSegment {j+2}/{n_man+1} (post-manoeuvre {j+1})...")
+            seg_name = f"{base}_seg{j+1}.csv"
+            try:
+                seg_out = self.propagate(temp_config, seg_name)
+            finally:
+                if os.path.exists(temp_config):
+                    os.remove(temp_config)
+            segment_csvs.append(seg_out)
+            segment_dfs.append(pd.read_csv(seg_out))
+
+        # Combine segments, shifting times so each continues from the previous
+        # end. Record t* at each join (last-row time of pre-segment in
+        # combined-time coordinates).
+        combined_frames = [segment_dfs[0]]
+        time_offset = float(segment_dfs[0]['tSec'].iloc[-1])
+        t_star_list.append(time_offset)  # first manoeuvre epoch
+
+        for k in range(1, len(segment_dfs)):
+            df_k = segment_dfs[k].copy()
+            df_k['tSec'] = df_k['tSec'] + time_offset
+            # Skip the duplicate join row.
+            combined_frames.append(df_k.iloc[1:])
+            time_offset = float(df_k['tSec'].iloc[-1])
+            if k < len(segment_dfs) - 1:
+                t_star_list.append(time_offset)
+
+        combined_output = os.path.abspath(os.path.join("out", combined_filename))
+        df_combined = pd.concat(combined_frames, ignore_index=True)
+        df_combined.to_csv(combined_output, index=False)
+
+        print(f"\tt_star epochs (s): {['%.2f' % t for t in t_star_list]}")
+        print("\tSuccessfully completed propagate_multiple_manoeuvres")
+        print("\t-------------------------------------------------")
+        return segment_csvs, combined_output, t_star_list
+
 
 def plot_orbit_3d(csv_file, output_file=None, title="Orbital Trajectory",
                   manoeuvre_idx=None):
