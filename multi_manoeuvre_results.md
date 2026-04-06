@@ -1,5 +1,7 @@
 # Multi-Manoeuvre FGO Results
 
+**See [graph of results as well](./plots/mc_multi_manoeuvre.png)**
+
 ## Test configuration
 - Model: $J2+SRP$ (simple config), $dt=60$ s
 - $Q_{pos}=4.2\times 10^{-4}$ m, $Q_{vel}=1.4\times 10^{-5}$ m/s (calibrated 3x J2+SRP mismatch)
