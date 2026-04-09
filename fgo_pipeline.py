@@ -346,11 +346,11 @@ def run_fgo_with_propagator(config_path,
     dv_initial_error = config_params.get('dv_initial_error', 0.5)
 
     t_star_true = None
-    if delta_v_eci is not None and first_csv_path is not None and use_gaussian_estimation:
-        # Determine t_star from pre-manoeuvre propagation
-        df_pre = pd.read_csv(first_csv_path)
-        t_star_true = float(df_pre['tSec'].iloc[-1])
+    if delta_v_eci is not None and first_csv_path is not None:
+        df_pre_tstar = pd.read_csv(first_csv_path)
+        t_star_true = float(df_pre_tstar['tSec'].iloc[-1])
 
+    if delta_v_eci is not None and first_csv_path is not None and use_gaussian_estimation:
         # Create initial guesses with noise (applied in ECI)
         dv_guess = delta_v_eci + np.random.normal(0, dv_initial_error, 3)
 
@@ -421,7 +421,8 @@ def run_fgo_with_propagator(config_path,
         'times': times,
         'dt': dt,
         'ground_stations': ground_stations,
-        'use_range': use_range
+        'use_range': use_range,
+        't_star_true': t_star_true,
     }
 
     # Add manoeuvre estimation info to results (all in RIC)

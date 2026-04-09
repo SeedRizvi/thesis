@@ -16,7 +16,7 @@ import shutil
 # Manoeuvre configs to compare
 configs = [
     ("configs/config_geo_one_rev_deltaRIC1.yml", "deltaRIC1"),
-    ("configs/config_geo_one_rev_deltaRIC1.yml", "deltaRIC0"),
+    ("configs/config_geo_one_rev_deltaRIC0.yml", "deltaRIC0"),
 ]
 
 # Two modes to run
