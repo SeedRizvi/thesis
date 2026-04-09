@@ -14,28 +14,14 @@ import os
 import shutil
 
 # Manoeuvre configs to compare
-# configs = [
-#     ("configs/config_geo_short_deltaZ1.yml", "deltaZ1"),
-#     ("configs/config_geo_short_deltaZ2.yml", "deltaZ2"),
-#     ("configs/config_geo_short_deltaZ5.yml", "deltaZ5"),
-#     ("configs/config_geo_short_deltaZ50.yml", "deltaZ50"),
-# ]
-
 configs = [
-    # ("configs/config_geo_one_rev_deltaXYZ1.yml", "deltaXYZ1"),
-    # ("configs/config_geo_one_rev_deltaXYZ1_simple.yml", "deltaXYZ1_smaller_stdev"),
+    ("configs/config_geo_one_rev_deltaRIC1.yml", "deltaRIC1"),
+    ("configs/config_geo_one_rev_deltaRIC1.yml", "deltaRIC0"),
 ]
-
-configs = [
-    ("configs/config_geo_one_rev_deltaXYZ1.yml", "deltaXYZ1_scaled_eps_refactor"),
-    # ("configs/config_geo_one_rev_deltaXYZ1_simple.yml", "deltaXYZ1_simple_Qvel_0.000046"),
-]
-
-# Smaller stddev -> from 0.5 to 0.01 m/s
 
 # Two modes to run
 modes = [
-    # {"flag": "--no-gaussian", "suffix": "legacy",   "label": "Legacy (no estimation)"},
+    {"flag": "--no-gaussian", "suffix": "legacy",   "label": "Legacy (no estimation)"},
     {"flag": "",              "suffix": "gaussian",  "label": "Gaussian Estimation"},
 ]
 
