@@ -68,16 +68,16 @@ fgo_parameters:
   # Measurement configuration
   use_range: true  # Enable range measurements for better accuracy
   measurement_noise_deg: 0.00278  # Angular measurement noise (deg) - Currently 10 arcseconds
-  range_noise_m: 15.0  # Range measurement noise in metres
+  range_noise_m: 10.0  # Range measurement noise in metres
   
-  # Process noise (dynamics uncertainty)
-  # * Following values configured for dt=60s
-  # ------ Conservative values (10x error margin) ------
-  # process_noise_position: 0.0014  # Position process noise (m)
-  # process_noise_velocity: 0.000046   # Velocity process noise (m/s)
-  # ------ Calibrated values (3x error margin) ------
-  process_noise_position: [3.133212e-04, 2.196277e-04, 1.367641e-04]  # Position process noise [R, I, C] (m)
-  process_noise_velocity: [1.044944e-04, 7.256877e-05, 4.556240e-05]  # Velocity process noise [R, I, C] (m/s)
+  # Process noise (dynamics uncertainty, Q Matrix)
+  # Following values configured for dt=60s (see noise_variables_results.md)
+  # Qpos (3x Calibrated, 9x dynamics error RMS per RIC Axis)
+  process_noise_position: [9.399636e-04, 6.588831e-04, 4.102923e-04]  # Position process noise [R, I, C] (m)
+  # Qvel (3x Calibrated, 9x dynamics error RMS per RIC Axis)
+  process_noise_velocity: [3.134832e-05, 2.177063e-05, 1.366872e-05]  # Velocity process noise [R, I, C] (m/s)
+  # process_noise_velocity: [1.044944e-05, 7.256877e-06, 4.556240e-06] # 1x Calibrated
+  # process_noise_velocity: [1.044944e-04, 7.256877e-05, 4.556240e-05]  # 10x Calibrated
 
   # Initial state errors (for testing)
   initial_position_error: 1000.0  # Initial position error std dev (m)
