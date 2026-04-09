@@ -130,9 +130,9 @@ print("SUCCESS")
             float(last_state['x']),
             float(last_state['y']),
             float(last_state['z']),
-            float(last_state['vx']) + delta_v[0],
-            float(last_state['vy']) + delta_v[1],
-            float(last_state['vz']) + delta_v[2]
+            float(float(last_state['vx']) + delta_v[0]),
+            float(float(last_state['vy']) + delta_v[1]),
+            float(float(last_state['vz']) + delta_v[2])
         ]
 
         # Load and modify config for second propagation
