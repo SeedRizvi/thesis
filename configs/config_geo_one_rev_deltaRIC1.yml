@@ -91,7 +91,7 @@ manoeuvre_parameters:
   # Manoeuvre Delta-V in RIC frame: [Radial, In-track, Cross-track] (m/s)
   delta_v_ric: [1.0, 1.0, 1.0]
   # Post-Manoeuvre Propagation Duration
-  pm_duration: 0.95  # Duration in days (0.85 days = 20.4 hours)
+  pm_duration: 0.95  # Duration in days (0.95 days = 22.8 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
   t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)

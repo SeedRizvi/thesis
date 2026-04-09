@@ -13,25 +13,25 @@ initial_orbtial_parameters:
   # GEO satellite with small inclination (5 degrees)
   # Position at GEO radius with slight inclination
   initial_state: [
-    42014290.0,    # x (m) - near GEO radius
-    0.0,           # y (m)
-    3681524.0,     # z (m) - gives ~5 deg inclination
-    0.0,           # vx (m/s)
-    3066.0,        # vy (m/s) - orbital velocity at GEO
-    0.0            # vz (m/s)
+    40812387.0,     # x (m)
+    10590400.0,     # y (m)
+    -83444.0,       # z (m) - near-equatorial
+    -772.3,         # vx (m/s)
+    2976.1,         # vy (m/s)
+    0.0             # vz (m/s)
   ]
   initial_state_type: ECI
 
 propagator_truth_settings:
   # High-fidelity propagation settings
-  earth_gravity_model_order: 20  # Reduced for speed
-  earth_gravity_model_degree: 20
-  third_body_attraction: true
-  third_body_sun: true
-  third_body_moon: true
+  earth_gravity_model_order: 2  # Reduced for speed
+  earth_gravity_model_degree: 2
+  third_body_attraction: false
+  third_body_sun: false
+  third_body_moon: false
   solid_earth_tide: false  # Disabled for simplicity
   ocean_tide_loading: false  # Disabled for simplicity
-  solar_radiation_pressure: true
+  solar_radiation_pressure: false # Disabled for simplicity
   atmospheric_drag: false  # Negligible at GEO
   relativity_effect: false  # Disabled for simplicity
   srpCoef: 1.0
@@ -47,48 +47,38 @@ supporting_files:
 
 # Ground station network for measurements
 ground_stations:
-  - name: "New York"
-    latitude: 40.7128   # degrees
-    longitude: -74.0060  # degrees
-    altitude: 0.0        # metres
-    
-  - name: "London"
-    latitude: 51.5074
-    longitude: -0.1278
-    altitude: 0.0
-    
-  - name: "Tokyo"
-    latitude: 35.6762
-    longitude: 139.6503
-    altitude: 0.0
-    
-  - name: "Sydney"
-    latitude: -33.8688
-    longitude: 151.2093
-    altitude: 0.0
-    
+  - name: "Rocky Point"
+    latitude: -12.6192729   # degrees
+    longitude: 141.8750835  # degrees
+    altitude: 0        # metres
+  
   - name: "Singapore"
     latitude: 1.3521
     longitude: 103.8198
     altitude: 0.0
-    
-  - name: "Sao Paulo"
-    latitude: -23.5505
-    longitude: -46.6333
-    altitude: 0.0
 
+  - name: "Tsukuba"
+    latitude: 36.0675 
+    longitude: 140.1313
+    altitude: 0.0
+    
 # FGO-specific parameters
 fgo_parameters:
 
   # Measurement configuration
   use_range: true  # Enable range measurements for better accuracy
   measurement_noise_deg: 0.00278  # Angular measurement noise (deg) - Currently 10 arcseconds
-  range_noise_m: 100.0  # Range measurement noise in metres
+  range_noise_m: 10.0  # Range measurement noise in metres
   
-  # Process noise (dynamics uncertainty)
-  process_noise_position: 100.0  # Position process noise (m)
-  process_noise_velocity: 0.001   # Velocity process noise (m/s)
-  
+  # Process noise (dynamics uncertainty, Q Matrix)
+  # Following values configured for dt=60s (see noise_variables_results.md)
+  # Qpos (3x Calibrated, 9x dynamics error RMS per RIC Axis)
+  process_noise_position: [9.399636e-04, 6.588831e-04, 4.102923e-04]  # Position process noise [R, I, C] (m)
+  # Qvel (3x Calibrated, 9x dynamics error RMS per RIC Axis)
+  process_noise_velocity: [3.134832e-05, 2.177063e-05, 1.366872e-05]  # Velocity process noise [R, I, C] (m/s)
+  # process_noise_velocity: [1.044944e-05, 7.256877e-06, 4.556240e-06] # 1x Calibrated
+  # process_noise_velocity: [1.044944e-04, 7.256877e-05, 4.556240e-05]  # 10x Calibrated
+
   # Initial state errors (for testing)
   initial_position_error: 1000.0  # Initial position error std dev (m)
   initial_velocity_error: 1.0     # Initial velocity error std dev (m/s)
@@ -98,10 +88,10 @@ fgo_parameters:
   convergence_threshold: 0.001
 
 manoeuvre_parameters:
-  # Manoeuvre Delta-V: [X, Y, Z] (m/s)
-  delta_v: [0.0, 0.0, 1.0]
+  # Manoeuvre Delta-V in RIC frame: [Radial, In-track, Cross-track] (m/s)
+  delta_v_ric: [5.0, 5.0, 5.0]
   # Post-Manoeuvre Propagation Duration
-  pm_duration: 0.85  # Duration in days (0.85 days = 20.4 hours)
+  pm_duration: 0.95  # Duration in days (0.95 days = 22.8 hours)
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
-  dv_initial_error: 0.5     # Initial delta-v guess error std dev (m/s)
+  dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
   t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)
