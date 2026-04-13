@@ -1,4 +1,4 @@
 - Function docs for SatelliteOrbitFGO class in [Orbit_FGO.py](Orbit_FGO.py)
-- Make config file noise variable prints indicate that it is actually covariance. e.g. Expected Process noise covariance
 - Monte-Carlo testing + removing the static random seed
-- Express Delta-V in terms of RTN/ In-track cross track frame rather than xyz
+- Rename process noise variables in config to Q_pos_ric, Q_vel_ric.
+- Implement EKF for comparison

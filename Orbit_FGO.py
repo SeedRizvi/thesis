@@ -33,6 +33,32 @@ def fd_state_step(state_component: float) -> float:
     return max(FD_REL_STEP * abs(state_component), FD_STATE_FLOOR)
 
 
+def eci_to_ric_rotation_matrix(state):
+    """3x3 rotation matrix from ECI to RIC frame.
+      R (radial)     = r / |r|
+      C (cross-track) = (r x v) / |r x v|
+      I (in-track)   = C x R
+    """
+    r, v = state[:3], state[3:]
+    R_hat = r / la.norm(r)
+    C_hat = np.cross(r, v)
+    C_hat = C_hat / la.norm(C_hat)
+    I_hat = np.cross(C_hat, R_hat)
+    return np.array([R_hat, I_hat, C_hat])
+
+
+def ric_to_eci(dv_ric, state):
+    """Convert vector from RIC to ECI using the state's orbital frame."""
+    T = eci_to_ric_rotation_matrix(state)
+    return T.T @ dv_ric
+
+
+def eci_to_ric(dv_eci, state):
+    """Convert vector from ECI to RIC using the state's orbital frame."""
+    T = eci_to_ric_rotation_matrix(state)
+    return T @ dv_eci
+
+
 def gaussian_impulse(t, t_star, epsilon):
     """Gaussian approximation to Dirac delta (Eq. 17 from Zhang et al.)"""
     return (1.0 / (epsilon * sqrt(2 * pi))) * exp(-(t - t_star)**2 / (2 * epsilon**2))
@@ -68,7 +94,8 @@ def dense_2_sp_lists(M: np.array, tl_row: int, tl_col: int, row_vec=True):
 
 
 class SatelliteOrbitFGO:
-    def __init__(self, meas: np.array, R: np.array, Q: np.array,
+    def __init__(self, meas: np.array, R: np.array,
+                 q_pos_ric: np.array, q_vel_ric: np.array,
                  ground_stations: list,
                  dt: float = 60.0,
                  x0: np.array = None,
@@ -110,7 +137,8 @@ class SatelliteOrbitFGO:
         self.omega_earth = 7.2921159e-5
 
         self.meas = meas
-        self.S_Q_inv = la.inv(la.cholesky(Q))
+        self.q_pos_ric = np.array(q_pos_ric, dtype=float)
+        self.q_vel_ric = np.array(q_vel_ric, dtype=float)
         
         # Handle R matrix for different measurement types
         # TODO: Confirm if needed, or just remove
@@ -144,6 +172,20 @@ class SatelliteOrbitFGO:
             self.man_params[4*j+3] = man['t_star']
 
         self.create_init_state()
+
+    def compute_S_Q_inv(self, state):
+        """Compute S_Q_inv = inv(chol(Q)) for a given state.
+
+        Rotates the RIC position and velocity process noise into ECI
+        using the orbital state, then creates the full 6x6 Q matrix.
+        """
+        T = eci_to_ric_rotation_matrix(state)
+        Q_pos_eci = T.T @ np.diag(self.q_pos_ric) @ T
+        Q_vel_eci = T.T @ np.diag(self.q_vel_ric) @ T
+        Q = np.zeros((6, 6))
+        Q[:3, :3] = Q_pos_eci
+        Q[3:, 3:] = Q_vel_eci
+        return la.inv(la.cholesky(Q))
 
     def create_init_state(self):
         for i in range(1, self.N):
@@ -383,19 +425,20 @@ class SatelliteOrbitFGO:
 
         for i in range(1, self.N):
             t_start = (i - 1) * self.dt
-            mat1 = self.S_Q_inv @ self.F_mat(self.states[i-1], t_start)
+            S_Q_inv_i = self.compute_S_Q_inv(self.states[i-1])
+            mat1 = S_Q_inv_i @ self.F_mat(self.states[i-1], t_start)
             data_l[t_e:t_e+F_size], row_l[t_e:t_e+F_size], col_l[t_e:t_e+F_size] = \
                 dense_2_sp_lists(mat1, self.dyn_idx(i), self.state_idx(i-1))
             t_e += F_size
 
-            mat2 = -self.S_Q_inv
+            mat2 = -S_Q_inv_i
             data_l[t_e:t_e+F_size], row_l[t_e:t_e+F_size], col_l[t_e:t_e+F_size] = \
                 dense_2_sp_lists(mat2, self.dyn_idx(i), self.state_idx(i))
             t_e += F_size
 
             # Manoeuvre Jacobian columns
             if self.n_manoeuvres > 0:
-                mat_man = self.S_Q_inv @ self.F_man_mat(self.states[i-1], t_start)
+                mat_man = S_Q_inv_i @ self.F_man_mat(self.states[i-1], t_start)
                 data_l[t_e:t_e+F_man_size], row_l[t_e:t_e+F_man_size], col_l[t_e:t_e+F_man_size] = \
                     dense_2_sp_lists(mat_man, self.dyn_idx(i), self.man_param_col_start())
                 t_e += F_man_size
@@ -428,7 +471,8 @@ class SatelliteOrbitFGO:
         for i in range(1, self.N):
             t_start = (i - 1) * self.dt
             pred_meas = self.prop_one_timestep(state_data[i-1], t_start) - state_data[i]
-            y[self.dyn_idx(i):self.dyn_idx(i)+6] = self.S_Q_inv @ (-pred_meas)
+            S_Q_inv_i = self.compute_S_Q_inv(state_data[i-1])
+            y[self.dyn_idx(i):self.dyn_idx(i)+6] = S_Q_inv_i @ (-pred_meas)
         
         for i in range(self.N):
             t = i * self.dt
