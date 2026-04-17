@@ -14,7 +14,7 @@ from fgo_pipeline import load_propagator_output, load_config_parameters
 from Orbit_FGO import SatelliteOrbitFGO, eci_to_ric_rotation_matrix
 from propagator import OrbitPropagator
 
-CONFIG_PATH = "configs/config_geo_one_rev_deltaRIC1.yml"
+CONFIG_PATH = "configs/config_geo_one_rev_deltaC0.5.yml"
 
 
 def measure_ric_mismatch(config_path, dt_val=60.0):

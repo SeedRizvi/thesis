@@ -75,8 +75,6 @@ fgo_parameters:
   process_noise_position: [9.399636e-04, 6.588831e-04, 4.102923e-04]  # Position process noise [R, I, C] (m)
   # Qvel (3x Calibrated, 9x dynamics error RMS per RIC Axis)
   process_noise_velocity: [3.134832e-05, 2.177063e-05, 1.366872e-05]  # Velocity process noise [R, I, C] (m/s)
-  # process_noise_velocity: [1.044944e-05, 7.256877e-06, 4.556240e-06] # 1x Calibrated
-  # process_noise_velocity: [1.044944e-04, 7.256877e-05, 4.556240e-05]  # 10x Calibrated
 
   # Initial state errors
   initial_position_error: 1000.0  # Initial position error std dev (m)
@@ -88,7 +86,7 @@ fgo_parameters:
 
 manoeuvre_parameters:
   # Manoeuvre Delta-V in RIC frame: [Radial, In-track, Cross-track] (m/s)
-  delta_v_ric: [0.5, 0.5, 0.5]
+  delta_v_ric: [0.0, 0.2, 0.0]
   # Post-Manoeuvre Propagation Duration
   pm_duration: 1.0          # Duration in days
   epsilon: 0.5              # Gaussian shaping parameter (seconds)

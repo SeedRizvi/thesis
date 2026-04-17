@@ -1,8 +1,8 @@
 # Configuration file for GEO satellite orbit propagation
-# Optimised for Factor Graph Optimization testing
+# Factor Graph Optimisation testing
 
 scenario_parameters:
-  time_step: 60  # 1 minute timesteps
+  time_step: 60  # dt (seconds)
   MJD_start: 59349.00
   MJD_end: 59349.15  # ~3.6 hours of data  
   max_time_step: 60
@@ -10,8 +10,7 @@ scenario_parameters:
 
 initial_orbtial_parameters:
   dim_state: 6
-  # GEO satellite with small inclination (5 degrees)
-  # Position at GEO radius with slight inclination
+  # GEO satellite over Australia/Southeast Asia
   initial_state: [
     40812387.0,     # x (m)
     10590400.0,     # y (m)
@@ -23,9 +22,9 @@ initial_orbtial_parameters:
   initial_state_type: ECI
 
 propagator_truth_settings:
-  # High-fidelity propagation settings
-  earth_gravity_model_order: 2  # Reduced for speed
-  earth_gravity_model_degree: 2
+  # orbDetHOUSE propagation settings
+  earth_gravity_model_order: 2  # Only up to J2
+  earth_gravity_model_degree: 2 # Only up to J2
   third_body_attraction: false
   third_body_sun: false
   third_body_moon: false
@@ -79,7 +78,7 @@ fgo_parameters:
   # process_noise_velocity: [1.044944e-05, 7.256877e-06, 4.556240e-06] # 1x Calibrated
   # process_noise_velocity: [1.044944e-04, 7.256877e-05, 4.556240e-05]  # 10x Calibrated
 
-  # Initial state errors (for testing)
+  # Initial state errors
   initial_position_error: 1000.0  # Initial position error std dev (m)
   initial_velocity_error: 1.0     # Initial velocity error std dev (m/s)
   
@@ -89,9 +88,9 @@ fgo_parameters:
 
 manoeuvre_parameters:
   # Manoeuvre Delta-V in RIC frame: [Radial, In-track, Cross-track] (m/s)
-  delta_v_ric: [5.0, 5.0, 5.0]
+  delta_v_ric: [0.0, 0.0, 0.2]
   # Post-Manoeuvre Propagation Duration
-  pm_duration: 0.95  # Duration in days (0.95 days = 22.8 hours)
+  pm_duration: 1.0          # Duration in days
   epsilon: 0.5              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
   t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)
