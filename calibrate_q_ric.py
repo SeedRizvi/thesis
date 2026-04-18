@@ -14,7 +14,7 @@ from fgo_pipeline import load_propagator_output, load_config_parameters
 from Orbit_FGO import SatelliteOrbitFGO, eci_to_ric_rotation_matrix
 from propagator import OrbitPropagator
 
-CONFIG_PATH = "configs/config_geo_one_rev_deltaC0.5.yml"
+CONFIG_PATH = "configs/config_geo_one_rev.yml"
 
 
 def measure_ric_mismatch(config_path, dt_val=60.0):
@@ -115,13 +115,13 @@ def print_report(pos_err, vel_err, N):
 
     # Suggested Q values
     print("\n" + "=" * 100)
-    print("Suggested Q values (3x RMS):")
+    print("Suggested Q values (5x RMS):")
     print("=" * 100)
     q_pos_vals = []
     q_vel_vals = []
     for j, ax in enumerate(labels):
-        q_vel = 3 * np.sqrt(np.mean(vel_err[:, j]**2))
-        q_pos = 3 * np.sqrt(np.mean(pos_err[:, j]**2))
+        q_vel = 5 * np.sqrt(np.mean(vel_err[:, j]**2))
+        q_pos = 5 * np.sqrt(np.mean(pos_err[:, j]**2))
         q_pos_vals.append(q_pos)
         q_vel_vals.append(q_vel)
         print(f"  {ax}: Q_pos = {q_pos:.6e} m,  Q_vel = {q_vel:.6e} m/s")

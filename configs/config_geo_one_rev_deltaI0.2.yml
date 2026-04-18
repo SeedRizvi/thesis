@@ -71,10 +71,10 @@ fgo_parameters:
   
   # Process noise (dynamics uncertainty, Q Matrix)
   # Following values configured for dt=60s (see noise_variables_results.md)
-  # Qpos (3x Calibrated, 9x dynamics error RMS per RIC Axis)
-  process_noise_position: [9.399636e-04, 6.588831e-04, 4.102923e-04]  # Position process noise [R, I, C] (m)
-  # Qvel (3x Calibrated, 9x dynamics error RMS per RIC Axis)
-  process_noise_velocity: [3.134832e-05, 2.177063e-05, 1.366872e-05]  # Velocity process noise [R, I, C] (m/s)
+  # Qpos (Calibrated, 5x dynamics error RMS per RIC Axis)
+  process_noise_position: [5.222393e-04, 3.661425e-04, 2.168107e-04] # Position process noise [R, I, C] (m)
+  # Qvel (Calibrated, 5x dynamics error RMS per RIC Axis)
+  process_noise_velocity: [1.741698e-05, 1.209809e-05, 7.227003e-06] # Velocity process noise [R, I, C] (m/s)
 
   # Initial state errors
   initial_position_error: 1000.0  # Initial position error std dev (m)
