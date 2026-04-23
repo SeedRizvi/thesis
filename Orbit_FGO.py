@@ -102,7 +102,8 @@ class SatelliteOrbitFGO:
                  use_range: bool = True,
                  meas_per_station: int = None,
                  manoeuvres=None,
-                 epsilon: float = 0.5):
+                 epsilon: float = 0.5,
+                 use_substep: bool = False):
         
         self.ground_stations = ground_stations
         self.n_stations = len(ground_stations)
@@ -158,6 +159,7 @@ class SatelliteOrbitFGO:
 
         # Gaussian impulse manoeuvre parameters
         self.epsilon = epsilon
+        self.use_substep = use_substep
         if manoeuvres is not None and len(manoeuvres) > 0:
             self.manoeuvres = manoeuvres
             self.n_manoeuvres = len(manoeuvres)
@@ -254,7 +256,7 @@ class SatelliteOrbitFGO:
                 t_current = None
 
             if t_current is not None and self.n_manoeuvres > 0 and \
-               self._needs_substep(t_current, t_current + dt):
+               self.use_substep and self._needs_substep(t_current, t_current + dt):
                 # Adaptive sub-stepping: use small steps to resolve Gaussian
                 sub_dt = self.epsilon / 5.0
                 n_sub = int(ceil(dt / sub_dt))

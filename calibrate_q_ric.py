@@ -77,7 +77,7 @@ def print_report(pos_err, vel_err, N):
 
     print("\nPosition mismatch per step (m):")
     print(f"  {'axis':>4} | {'mean':>12} | {'|mean|':>12} | {'std':>12} | "
-          f"{'RMS':>12} | {'max |err|':>12} | {'3x RMS':>12}")
+          f"{'RMS':>12} | {'max |err|':>12} | {'5x RMS':>12}")
     print("  " + "-" * 90)
     for j, ax in enumerate(labels):
         col = pos_err[:, j]
@@ -87,11 +87,11 @@ def print_report(pos_err, vel_err, N):
         rms = np.sqrt(np.mean(col**2))
         max_abs = np.max(np.abs(col))
         print(f"  {ax:>4} | {mean:>+12.4e} | {abs_mean:>12.4e} | {std:>12.4e} | "
-              f"{rms:>12.4e} | {max_abs:>12.4e} | {3*rms:>12.4e}")
+              f"{rms:>12.4e} | {max_abs:>12.4e} | {5*rms:>12.4e}")
 
     print("\nVelocity mismatch per step (m/s):")
     print(f"  {'axis':>4} | {'mean':>12} | {'|mean|':>12} | {'std':>12} | "
-          f"{'RMS':>12} | {'max |err|':>12} | {'3x RMS':>12}")
+          f"{'RMS':>12} | {'max |err|':>12} | {'5x RMS':>12}")
     print("  " + "-" * 90)
     for j, ax in enumerate(labels):
         col = vel_err[:, j]
@@ -101,7 +101,7 @@ def print_report(pos_err, vel_err, N):
         rms = np.sqrt(np.mean(col**2))
         max_abs = np.max(np.abs(col))
         print(f"  {ax:>4} | {mean:>+12.4e} | {abs_mean:>12.4e} | {std:>12.4e} | "
-              f"{rms:>12.4e} | {max_abs:>12.4e} | {3*rms:>12.4e}")
+              f"{rms:>12.4e} | {max_abs:>12.4e} | {5*rms:>12.4e}")
 
     # Ratios
     print("\n" + "=" * 100)

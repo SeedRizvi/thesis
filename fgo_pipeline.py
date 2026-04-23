@@ -190,7 +190,9 @@ def run_fgo_with_propagator(config_path,
                            use_range=None,
                            max_iterations=None,
                            verbose=True,
-                           use_gaussian_estimation=True):
+                           use_gaussian_estimation=True,
+                           use_substep=False,
+                           epsilon_override=None):
     """
     Complete pipeline: propagate orbit, simulate measurements, run FGO
 
@@ -342,7 +344,7 @@ def run_fgo_with_propagator(config_path,
     
     # Step 6: Run FGO
     manoeuvres = None
-    epsilon = config_params.get('epsilon', 0.5)
+    epsilon = epsilon_override if epsilon_override is not None else config_params.get('epsilon', 0.5)
     dv_initial_error = config_params.get('dv_initial_error', 0.5)
 
     t_star_true = None
@@ -370,7 +372,8 @@ def run_fgo_with_propagator(config_path,
 
     fgo = SatelliteOrbitFGO(measurements, R, q_pos_ric, q_vel_ric,
                             ground_stations, dt, x0=x0,
-                            use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon)
+                            use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon,
+                            use_substep=use_substep)
     fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     # Step 7: Compute final errors
@@ -633,6 +636,10 @@ if __name__ == '__main__':
                        help='Suppress verbose output')
     parser.add_argument('--no-gaussian', dest='use_gaussian', action='store_false', default=True,
                        help='Disable Gaussian impulse estimation (use legacy split-propagation)')
+    parser.add_argument('--substep', dest='use_substep', action='store_true', default=False,
+                       help='Enable sub-stepping near manoeuvre epoch')
+    parser.add_argument('--epsilon', type=float, default=None,
+                       help='Override Gaussian pulse width epsilon (seconds)')
 
     args = parser.parse_args()
 
@@ -644,7 +651,9 @@ if __name__ == '__main__':
         use_range=args.use_range,
         max_iterations=args.max_iters,
         verbose=not args.quiet,
-        use_gaussian_estimation=args.use_gaussian
+        use_gaussian_estimation=args.use_gaussian,
+        use_substep=args.use_substep,
+        epsilon_override=args.epsilon
     )
     
     # Generate plots
