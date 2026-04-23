@@ -89,6 +89,6 @@ manoeuvre_parameters:
   delta_v_ric: [0.5, 0.5, 0.5]
   # Post-Manoeuvre Propagation Duration
   pm_duration: 1.0          # Duration in days
-  epsilon: 0.5              # Gaussian shaping parameter (seconds)
+  epsilon: 30.0              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
   t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)
