@@ -1,4 +1,1 @@
-- Function docs for SatelliteOrbitFGO class in [Orbit_FGO.py](Orbit_FGO.py)
-- Monte-Carlo testing + removing the static random seed
-- Rename process noise variables in config to Q_pos_ric, Q_vel_ric.
-- Implement EKF for comparison
+- Investigate angle-only measurement scenarios rather than angle+ranging

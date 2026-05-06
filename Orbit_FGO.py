@@ -20,7 +20,7 @@ FD_DV_STEP = 1e-4
 # Perturbation for t* in F_man_mat. Sized to the Gaussian pulse width
 # `epsilon` (config: manoeuvre_parameters/epsilon), not to t* itself.
 # The FD step must shift the pulse by a measurable fraction of its shape.
-# 0.01 s = 2% of epsilon=0.5s.
+# 0.01 s = 0.033% of epsilon=30s.
 FD_TSTAR_STEP = 0.01
 
 
