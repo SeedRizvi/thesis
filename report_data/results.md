@@ -106,3 +106,27 @@
 | FGO-G  | 0.0000               | 0.0044               | 0.0009               | 0.0184                               | 173.10        |
 | BLS-G  | −0.0072              | −0.0043              | −0.0106              | 0.0167                               | 1623.62       |
 | EKF-G  | 0.0003               | 0.0102               | −0.0029              | 0.0906                               | 121.33        |
+
+---
+
+## 4.3.4 Short arc manoeuvre case (`RIC0.5_short`, 3.6 hours)
+* Tested over a 3.6 hour arc (1.2 hours pre-manoeuvre + 2.4 hours post-manoeuvre), rather than standard 27.6 hour arc used in ALL other cases.
+
+**Table 26:** Orbit determination accuracy for `RIC0.5_short` (0.5 m/s per-axis manoeuvre, 3.6 h arc), 20 Monte Carlo trials.
+
+| Method | Pos. MRMS (m) | Vel. MRMS (m/s) | Conv. |
+|--------|--------------|-----------------|-------|
+| EKF-B  | 272.67       | 0.3528          | 20/20 |
+| BLS-B  | 1499.19      | 0.5639          | 0/20 |
+| FGO-B  | 242.97       | 0.1913          | 20/20 |
+| BLS-G  | 21.13        | 0.0299          | 20/20 |
+| FGO-G  | 31.51        | 0.0301          | 20/20 |
+| EKF-G  | 86.30        | 0.2540          | 20/20 |
+
+**Table 27:** Manoeuvre parameter estimation for `RIC0.5_short`. Mean errors across 20 trials.
+
+| Method | $\Delta v_R$ err (m/s) | $\Delta v_I$ err (m/s) | $\Delta v_C$ err (m/s) | $\|\|\Delta\mathbf{v}\|\|$ err (m/s) | $t^*$ RMS (s) |
+|--------|----------------------|----------------------|----------------------|--------------------------------------|---------------|
+| FGO-G  | 0.0045               | 0.0031               | 0.0002               | 0.0248                               | 7.65          |
+| BLS-G  | 0.0014               | −0.0001              | 0.0023               | 0.0101                               | 6.03          |
+| EKF-G  | −0.0071              | −0.1111              | −0.0758              | 0.4986                               | 79.45         |
