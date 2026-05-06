@@ -3,8 +3,8 @@ My FGO-based Impulsive Manoeuvre Estimation thesis project.
 
 ## Credits
 - [orbDetHOUSE](https://github.com/YangDrYang/orbDetHOUSE/tree/python_wrapper_propagator) for providing the propagator used for obtaining orbit data.
-
 - [C. Taylor and J. Gross](https://github.com/cntaylor/factorGraph2DsatelliteExample), 2D FGO satellite orbit model, which was adapted into 3D for this project in [Orbit_FGO.py](Orbit_FGO.py).
+- [Zhang et al.](https://ieeexplore.ieee.org/document/11107406/) for Gaussian approximation of impulsive manoeuvre which was adapted into a first-order method in this project for FGO, BLS, and EKF.
 
 ## Project Structure
 
