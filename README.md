@@ -47,7 +47,6 @@ git clone -b python_wrapper_propagator https://github.com/YangDrYang/orbDetHOUSE
 *Ubuntu/WSL:*
 ```bash
 sudo apt install libeigen3-dev libyaml-cpp-dev
-pip install pybind11
 ```
 
 *Arch Linux:*
@@ -57,8 +56,15 @@ If using Arch Linux, you'll need to update `makefile_py_wsl` in `orbDetHOUSE` to
 sudo pacman -S eigen pybind11 yaml-cpp
 ```
 
+**4. Create virtual environment and install Python dependencies**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+.venv/bin/pip install "numpy<2" pandas matplotlib pyyaml scipy pybind11
+```
 
-**4. Compile orbDetHOUSE**
+
+**5. Compile orbDetHOUSE**
 ```bash
 cd orbDetHOUSE/
 make -f makefile_py_wsl clean
@@ -67,12 +73,6 @@ python3 pyscripts/test_orbit_propagator_wrapper_wsl.py  # Test installation
 cd ..
 ```
 
-**5. Create virtual environment and install Python dependencies**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install "numpy<2" pandas matplotlib pyyaml scipy
-```
 
 ---
 
