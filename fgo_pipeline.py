@@ -619,6 +619,9 @@ def plot_fgo_results(results, save_path='fgo_results.png'):
     plt.savefig(error_save_path, dpi=150)
     print(f"Error plots saved to: {error_save_path}")
 
+    plt.close(fig)
+    plt.close(fig2)
+
     return fig
 
 

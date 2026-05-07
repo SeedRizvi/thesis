@@ -1,1 +1,2 @@
 - Investigate angle-only measurement scenarios rather than angle+ranging
+- Update project structure in README
