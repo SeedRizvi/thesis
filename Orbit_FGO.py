@@ -333,32 +333,68 @@ class SatelliteOrbitFGO:
             return azimuth, elevation
 
     def H_mat(self, state, station_idx, t):
-        """Compute measurement Jacobian with optional range"""
+        """Analytical measurement Jacobian ∂(az, el [, range])/∂(x, y, z, vx, vy, vz).
+
+        Chain rule: ECI -> ECEF -> ENU -> (az, el, range).
+        Velocity columns are zero (measurements depend only on position).
+        """
+        lat, lon, alt = self.ground_stations[station_idx]
+
+        # Station position in ECEF then ECI
+        theta = self.omega_earth * t
+        ct, st = cos(theta), sin(theta)
+        R_ecef_to_eci = np.array([[ct, -st, 0],
+                                  [st,  ct, 0],
+                                  [0,   0,  1]])
+
+        r_station_ecef = np.array([
+            (self.R_earth + alt) * cos(lat) * cos(lon),
+            (self.R_earth + alt) * cos(lat) * sin(lon),
+            (self.R_earth + alt) * sin(lat)
+        ])
+        r_station_eci = R_ecef_to_eci @ r_station_ecef
+
+        # Relative vector in ECI -> ECEF -> ENU
+        r_rel_eci = state[:3] - r_station_eci
+        R_eci_to_ecef = R_ecef_to_eci.T
+        r_rel_ecef = R_eci_to_ecef @ r_rel_eci
+
+        R_ecef_to_enu = np.array([
+            [-sin(lon),            cos(lon),             0       ],
+            [-sin(lat)*cos(lon),  -sin(lat)*sin(lon),    cos(lat)],
+            [ cos(lat)*cos(lon),   cos(lat)*sin(lon),    sin(lat)]
+        ])
+        r_enu = R_ecef_to_enu @ r_rel_ecef
+        e, n, u = r_enu
+
+        # Rotation from ECI position perturbation to ENU: R_enu<-ecef @ R_ecef<-eci
+        # ∂r_enu/∂r_eci = R_ecef_to_enu @ R_eci_to_ecef  (since ∂r_rel_eci/∂r_sat = I, ground station position does not depend on satellite state)
+        T = R_ecef_to_enu @ R_eci_to_ecef  # 3×3
+
+        # ∂az/∂(e,n,u) where az = atan2(e, n)
+        h2 = e**2 + n**2  # horizontal distance squared
+        daz_de =  n / h2
+        daz_dn = -e / h2
+        daz_du =  0.0
+        daz_denu = np.array([daz_de, daz_dn, daz_du])
+
+        # ∂el/∂(e,n,u) where el = atan2(u, sqrt(e²+n²))
+        rh = sqrt(h2)           # horizontal range
+        r2 = h2 + u**2          # total ENU distance squared
+        del_de = -u * e / (r2 * rh)
+        del_dn = -u * n / (r2 * rh)
+        del_du =  rh / r2
+        del_denu = np.array([del_de, del_dn, del_du])
+
         n_meas = 3 if self.use_range else 2
         H = np.zeros((n_meas, 6))
+        H[0, :3] = daz_denu @ T   # ∂az/∂r_eci
+        H[1, :3] = del_denu @ T   # ∂el/∂r_eci
 
-        meas0 = self.compute_measurements(state[:3],
-                                         self.ground_stations[station_idx], t)
-
-        for j in range(3):  # Only derivatives w.r.t position for measurements
-            eps_j = fd_state_step(state[j])
-            state_plus = state.copy()
-            state_plus[j] += eps_j
-            meas_plus = self.compute_measurements(state_plus[:3],
-                                                 self.ground_stations[station_idx], t)
-
-            # Azimuth with wrapping
-            az_diff = meas_plus[0] - meas0[0]
-            if az_diff > pi:
-                az_diff -= 2 * pi
-            elif az_diff < -pi:
-                az_diff += 2 * pi
-
-            H[0, j] = az_diff / eps_j
-            H[1, j] = (meas_plus[1] - meas0[1]) / eps_j
-
-            if self.use_range:
-                H[2, j] = (meas_plus[2] - meas0[2]) / eps_j
+        if self.use_range:
+            # ∂range/∂r_eci = r_rel_eci / ||r_rel_eci||
+            range_val = la.norm(r_rel_eci)
+            H[2, :3] = r_rel_eci / range_val
 
         return H
 
@@ -469,7 +505,6 @@ class SatelliteOrbitFGO:
             state_data = self.states
         
         y = np.zeros(6 * (self.N - 1) + self.N * self.n_stations * self.meas_per_station)
-        
         for i in range(1, self.N):
             t_start = (i - 1) * self.dt
             pred_meas = self.prop_one_timestep(state_data[i-1], t_start) - state_data[i]
@@ -482,32 +517,30 @@ class SatelliteOrbitFGO:
                 meas_pred = self.compute_measurements(
                     state_data[i, :3], self.ground_stations[s_idx], t
                 )
-                
                 meas_start = i * self.n_stations * self.meas_per_station + s_idx * self.meas_per_station
                 
                 if self.use_range:
                     az_meas = self.meas[meas_start]
                     el_meas = self.meas[meas_start + 1]
                     range_meas = self.meas[meas_start + 2]
-                    
+
                     az_diff = az_meas - meas_pred[0]
                     if az_diff > pi:
                         az_diff -= 2 * pi
                     elif az_diff < -pi:
                         az_diff += 2 * pi
-                    
-                    residual = np.array([az_diff, el_meas - meas_pred[1], 
+                    residual = np.array([az_diff, el_meas - meas_pred[1],
                                        range_meas - meas_pred[2]])
                 else:
                     az_meas = self.meas[meas_start]
                     el_meas = self.meas[meas_start + 1]
-                    
+
                     az_diff = az_meas - meas_pred[0]
                     if az_diff > pi:
                         az_diff -= 2 * pi
                     elif az_diff < -pi:
                         az_diff += 2 * pi
-                    
+
                     residual = np.array([az_diff, el_meas - meas_pred[1]])
                 
                 y_start = self.meas_idx(i) + s_idx * self.meas_per_station

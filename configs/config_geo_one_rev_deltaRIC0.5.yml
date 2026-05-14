@@ -46,31 +46,31 @@ supporting_files:
 
 # Ground station network for measurements
 ground_stations:
-  - name: "Rocky Point"
-    latitude: -12.6192729   # degrees
-    longitude: 141.8750835  # degrees
-    altitude: 0        # metres
-  
+  - name: "Siding Spring"
+    latitude: -31.2749006  # degrees
+    longitude: 149.0683836 # degrees
+    altitude: 1124.0       # metres
+
   - name: "Singapore"
     latitude: 1.3521
     longitude: 103.8198
-    altitude: 0.0
+    altitude: 15.0
 
   - name: "Tsukuba"
-    latitude: 36.0675 
+    latitude: 36.0675
     longitude: 140.1313
-    altitude: 0.0
+    altitude: 27.0
     
 # FGO-specific parameters
 fgo_parameters:
 
   # Measurement configuration
   use_range: true  # Enable range measurements for better accuracy
-  measurement_noise_deg: 0.00278  # Angular measurement noise (deg) - Currently 10 arcseconds
+  measurement_noise_deg: 0.000278  # Angular measurement noise (deg) - Currently 1 arcseconds
   range_noise_m: 10.0  # Range measurement noise in metres
   
   # Process noise (dynamics uncertainty, Q Matrix)
-  # Following values configured for dt=60s (see noise_variables_results.md)
+  # Following values configured for dt=60s (see report_data/report_sweep_sensitivity_summary.csv)
   # Qpos (Calibrated, 5x dynamics error RMS per RIC Axis)
   process_noise_position: [5.222393e-04, 3.661425e-04, 2.168107e-04] # Position process noise [R, I, C] (m)
   # Qvel (Calibrated, 5x dynamics error RMS per RIC Axis)
