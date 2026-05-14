@@ -6,6 +6,7 @@ Copies required data files to project root.
 
 import os
 import shutil
+import subprocess
 
 def setup_orbdethouse_dependencies(orbdethouse_path="orbDetHOUSE"):
     """Copy auxdata directory from orbDetHOUSE to current directory."""
@@ -42,11 +43,32 @@ def setup_orbdethouse_dependencies(orbdethouse_path="orbDetHOUSE"):
         return False
     
     print("+ orbit_propagator_wrapper.so found")
+
+    # Download DE440 ephemeris
+    de440_url = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440.bsp"
+    de440_path = os.path.join(dest_auxdata, "de440.bsp")
+    if os.path.exists(de440_path):
+        print(f"\n+ de440.bsp already exists, skipping download.")
+    else:
+        print(f"\nDownloading DE440 ephemeris (~114 MB)...")
+        result = subprocess.run(
+            ["wget", "--progress=bar:force", "-O", de440_path, de440_url],
+            stderr=subprocess.STDOUT
+        )
+        if result.returncode != 0:
+            if os.path.exists(de440_path):
+                os.remove(de440_path)
+            print("\nERROR: Failed to download de440.bsp.")
+            print("Please download it manually and place it in auxdata/:")
+            print(f"  {de440_url}")
+            return False
+        print("+ de440.bsp downloaded successfully")
+
     print("\n" + "="*60)
     print("Setup complete! You can now use:")
     print("  from propagator import OrbitPropagator, plot_orbit_3d")
     print("="*60)
-    
+
     return True
 
 
