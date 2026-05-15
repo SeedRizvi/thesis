@@ -152,6 +152,15 @@ def load_config_parameters(config_path):
         't_star_initial_error': 120.0
     }
 
+    # Scenario epoch
+    params['mjd_start'] = config.get('scenario_parameters', {}).get('MJD_start', None)
+
+    # SRP parameters from propagator settings
+    prop_settings = config.get('propagator_truth_settings', {})
+    params['srp_cr'] = prop_settings.get('srpCoef', 1.0)
+    params['srp_area'] = prop_settings.get('srpArea', 10.0)
+    params['srp_mass'] = prop_settings.get('satMass', 1000.0)
+
     # Load from config if available (defaults come from the `params` dict above)
     if 'fgo_parameters' in config:
         fgo_params = config['fgo_parameters']
@@ -373,7 +382,11 @@ def run_fgo_with_propagator(config_path,
     fgo = SatelliteOrbitFGO(measurements, R, q_pos_ric, q_vel_ric,
                             ground_stations, dt, x0=x0,
                             use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon,
-                            use_substep=use_substep)
+                            use_substep=use_substep,
+                            mjd_start=config_params['mjd_start'],
+                            srp_area=config_params['srp_area'],
+                            srp_mass=config_params['srp_mass'],
+                            srp_cr=config_params['srp_cr'])
     fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     # Step 7: Compute final errors

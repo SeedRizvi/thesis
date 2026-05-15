@@ -30,7 +30,7 @@ propagator_truth_settings:
   third_body_moon: false
   solid_earth_tide: false  # Disabled for simplicity
   ocean_tide_loading: false  # Disabled for simplicity
-  solar_radiation_pressure: false # Disabled for simplicity
+  solar_radiation_pressure: true
   atmospheric_drag: false  # Negligible at GEO
   relativity_effect: false  # Disabled for simplicity
   srpCoef: 1.0
@@ -72,9 +72,9 @@ fgo_parameters:
   # Process noise (dynamics uncertainty, Q Matrix)
   # Following values configured for dt=60s (see noise_variables_results.md)
   # Qpos (Calibrated, 5x dynamics error RMS per RIC Axis)
-  process_noise_position: [5.222393e-04, 3.661425e-04, 2.168107e-04] # Position process noise [R, I, C] (m)
-  # Qvel (Calibrated, 5x dynamics error RMS per RIC Axis)
-  process_noise_velocity: [1.741698e-05, 1.209809e-05, 7.227003e-06] # Velocity process noise [R, I, C] (m/s)
+  process_noise_position: [7.491478e-04, 6.499566e-04, 3.405569e-04] # Position process noise [R, I, C] (m)
+  # Qvel (Calibrated, 5x dynamics error RMS per RIC Axis, J2+SRP)
+  process_noise_velocity: [2.497797e-05, 2.160525e-05, 1.135189e-05] # Velocity process noise [R, I, C] (m/s)
 
   # Initial state errors
   initial_position_error: 1000.0  # Initial position error std dev (m)

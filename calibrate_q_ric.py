@@ -28,14 +28,14 @@ def measure_ric_mismatch(config_path, dt_val=60.0):
     with open(tmp_config, 'w') as f:
         yaml.dump(config, f)
 
-    _, ground_stations = load_config_parameters(config_path)
+    params, ground_stations = load_config_parameters(config_path)
 
     prop = OrbitPropagator("orbDetHOUSE")
     csv_path = prop.propagate(tmp_config, output_file="cal_ric_truth.csv")
     truth_states, times, dt = load_propagator_output(csv_path)
     N = len(truth_states)
 
-    # Create FGO just to use its dynamics
+    # Create FGO just to use its dynamics (including SRP if mjd_start is set)
     dummy_meas = np.zeros(N * len(ground_stations) * 3)
     dummy_R = np.eye(3)
     q_pos_ric = np.array([1.0, 1.0, 1.0])
@@ -45,6 +45,10 @@ def measure_ric_mismatch(config_path, dt_val=60.0):
         dummy_meas, dummy_R, q_pos_ric, q_vel_ric, ground_stations,
         dt=dt_val, x0=truth_states[0],
         use_range=True, manoeuvres=None,
+        mjd_start=params.get('mjd_start'),
+        srp_area=params.get('srp_area', 10.0),
+        srp_mass=params.get('srp_mass', 1000.0),
+        srp_cr=params.get('srp_cr', 1.0),
     )
 
     # Per-step errors in RIC
@@ -72,7 +76,7 @@ def print_report(pos_err, vel_err, N):
     labels = ['R', 'I', 'C']
 
     print("=" * 100)
-    print(f"Per-component dynamics mismatch in RIC frame (FGO J2 vs truth), N={N} steps")
+    print(f"Per-component dynamics mismatch in RIC frame (FGO J2+SRP vs truth), N={N} steps")
     print("=" * 100)
 
     print("\nPosition mismatch per step (m):")

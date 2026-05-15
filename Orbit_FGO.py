@@ -4,7 +4,13 @@ import numpy as np
 import scipy.linalg as la
 from math import pi, sqrt, ceil, atan2, sin, cos, exp
 import matplotlib.pyplot as plt
+from jplephem.spk import SPK
 
+# ---------------------------------------------------------------------------
+# Sun position from JPL DE440 ephemeris
+# ---------------------------------------------------------------------------
+_DE440_PATH = "auxdata/de440.bsp"
+_spk_kernel = None
 
 # -----------------------------------------------------------------------------
 # Finite-difference step sizes for numerical Jacobians
@@ -70,6 +76,87 @@ def gaussian_impulse_dt_star(t, t_star, epsilon):
     return g * (t - t_star) / (epsilon**2)
 
 
+def _get_spk():
+    """Load the DE440 SPK kernel"""
+    global _spk_kernel
+    if _spk_kernel is None:
+        _spk_kernel = SPK.open(_DE440_PATH)
+    return _spk_kernel
+
+def sun_position_eci(mjd):
+    """Sun position in Earth-centred inertial (ECI) frame, in metres.
+
+    Uses DE440: Sun_ECI = Sun_SSB - Earth_SSB
+    where Earth_SSB = EarthBarycenter_SSB + Earth_EarthBarycenter.
+
+    Args:
+        mjd: Modified Julian Date (scalar or array).
+    Returns:
+        np.ndarray(3): Sun position in ECI [m].
+    """
+    kernel = _get_spk()
+    jd = mjd + 2400000.5  # MJD to JD
+
+    # SSB -> Sun (0 -> 10), in km
+    r_sun_ssb = kernel[0, 10].compute(jd)
+    # SSB -> Earth Barycenter (0 -> 3), in km
+    r_eb_ssb = kernel[0, 3].compute(jd)
+    # Earth Barycenter -> Earth (3 -> 399), in km
+    r_earth_eb = kernel[3, 399].compute(jd)
+
+    # Sun relative to Earth, in km -> convert to metres
+    r_sun_eci = (r_sun_ssb - r_eb_ssb - r_earth_eb) * 1000.0
+    return r_sun_eci
+
+
+def shadow_factor(r_sat, r_sun):
+    """Conical shadow function ν ∈ [0, 1].
+
+    Returns 1 (full sunlight), 0 (umbra), or intermediate (penumbra)
+    using the apparent-angle method (Montenbruck & Gill, Section 3.4.2).
+
+    Args:
+        r_sat: Satellite position in ECI [m], shape (3,).
+        r_sun: Sun position in ECI [m], shape (3,).
+    Returns:
+        float: Shadow factor ν.
+    """
+    R_sun = 6.957e8              # Solar radius (m)
+    R_earth = 6378137.0          # Earth radius (m)
+
+    r_sat_norm = la.norm(r_sat)
+
+    # Vectors from satellite to Sun and satellite to Earth
+    sat_to_sun = r_sun - r_sat
+    sat_to_earth = -r_sat
+
+    sat_to_sun_norm = la.norm(sat_to_sun)
+    sat_to_earth_norm = r_sat_norm
+
+    # Angular separation between Sun and Earth as seen from satellite
+    cos_sep = np.dot(sat_to_sun, sat_to_earth) / (sat_to_sun_norm * sat_to_earth_norm)
+    cos_sep = np.clip(cos_sep, -1.0, 1.0)
+    c = np.arccos(cos_sep)
+
+    # Apparent angular radii as seen from satellite
+    a = np.arcsin(min(R_sun / sat_to_sun_norm, 1.0))    # Sun half-angle
+    b = np.arcsin(min(R_earth / sat_to_earth_norm, 1.0)) # Earth half-angle
+
+    if c >= a + b:
+        # No overlap (full sunlight)
+        return 1.0
+    elif c <= b - a:
+        # Total eclipse (umbra, Sun fully behind Earth)
+        return 0.0
+    else:
+        # Partial eclipse (penumbra, area overlap of two discs)
+        x = (c**2 + a**2 - b**2) / (2 * c)
+        y = sqrt(max(a**2 - x**2, 0.0))
+        A_overlap = a**2 * np.arccos(x / a) + b**2 * np.arccos((c - x) / b) - c * y
+        A_sun = pi * a**2
+        return 1.0 - A_overlap / A_sun
+
+
 def dense_2_sp_lists(M: np.array, tl_row: int, tl_col: int, row_vec=True):
     data_list = M.flatten()
     if len(M.shape) == 2:
@@ -103,7 +190,11 @@ class SatelliteOrbitFGO:
                  meas_per_station: int = None,
                  manoeuvres=None,
                  epsilon: float = 0.5,
-                 use_substep: bool = False):
+                 use_substep: bool = False,
+                 mjd_start: float = None,
+                 srp_area: float = 10.0,
+                 srp_mass: float = 1000.0,
+                 srp_cr: float = 1.0):
         
         self.ground_stations = ground_stations
         self.n_stations = len(ground_stations)
@@ -136,6 +227,23 @@ class SatelliteOrbitFGO:
         self.J2 = 1.08262668e-3
         self.R_earth = 6378137.0
         self.omega_earth = 7.2921159e-5
+
+        # Solar radiation pressure parameters
+        self.mjd_start = mjd_start
+        self.use_srp = mjd_start is not None
+        self.P_sun = 4.56e-6        # Solar radiation pressure at 1 AU (N/m^2)
+        self.AU = 1.496e11          # 1 AU in metres
+        self.A_over_m = srp_area / srp_mass
+        self.C_R = srp_cr
+
+        # Precompute sun positions at each timestep
+        if self.use_srp:
+            self._sun_positions = np.zeros((self.N, 3))
+            for i in range(self.N):
+                mjd_i = self.mjd_start + (i * self.dt) / 86400.0
+                self._sun_positions[i] = sun_position_eci(mjd_i)
+        else:
+            self._sun_positions = None
 
         self.meas = meas
         self.q_pos_ric = np.array(q_pos_ric, dtype=float)
@@ -175,6 +283,18 @@ class SatelliteOrbitFGO:
 
         self.create_init_state()
 
+    def get_sun_position(self, t):
+        """Sun position in ECI at internal time t (seconds from start).
+
+        Uses nearest precomputed position — the Sun moves <0.01° per
+        timestep at dt=60s, so interpolation is unnecessary.
+        """
+        if self._sun_positions is None:
+            raise RuntimeError("Sun positions not available (mjd_start not set)")
+        i = int(round(t / self.dt))
+        i = max(0, min(i, self.N - 1))
+        return self._sun_positions[i]
+
     def compute_S_Q_inv(self, state):
         """Compute S_Q_inv = inv(chol(Q)) for a given state.
 
@@ -211,6 +331,16 @@ class SatelliteOrbitFGO:
         ])
 
         a_total = a_2body + a_J2
+
+        # Solar radiation pressure with conical shadow
+        if self.use_srp and t is not None:
+            r_sun = self.get_sun_position(t)
+            nu = shadow_factor(r, r_sun)
+            if nu > 0:
+                r_sun_to_sat = r - r_sun
+                r_sun_to_sat_norm = la.norm(r_sun_to_sat)
+                a_srp = -nu * self.P_sun * self.C_R * self.A_over_m * (r_sun_to_sat / r_sun_to_sat_norm**3) * self.AU**2
+                a_total += a_srp
 
         # Gaussian impulse acceleration (Eq. 21)
         if t is not None and self.n_manoeuvres > 0:
