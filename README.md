@@ -1,5 +1,5 @@
-# Thesis
-My FGO-based Impulsive Manoeuvre Estimation thesis project.
+# Gaussian-Augmented Factor Graph Optimisation for Manoeuvre-Aware Orbit Determination of Geostationary Satellites
+This repository was used for my engineering thesis (Honours) project and contains **source code** and **test data**.
 
 ## Credits
 - [orbDetHOUSE](https://github.com/YangDrYang/orbDetHOUSE/tree/python_wrapper_propagator) for providing the propagator used for obtaining orbit data.
