@@ -1,2 +1,3 @@
-- Investigate angle-only measurement scenarios rather than angle+ranging
-- Update project structure in README
+- Update project structure in README. Also mention where the manuscript results are in the repo.
+- "# TODO: 100m range noise (ADJUSTABLE)" -> REMOVE THIS CONDITIONAL, it is unused.
+- Remove the deprecated/unused substepping leftovers.
