@@ -4,6 +4,24 @@ from math import pi
 from Orbit_FGO import SatelliteOrbitFGO, eci_to_ric_rotation_matrix
 
 
+def build_P0(n_manoeuvres, sigma_pos, sigma_vel,
+             sigma_dv=None, sigma_tstar=None):
+    """Create initial covariance matrix from standard deviations in config."""
+    if n_manoeuvres > 0 and (sigma_dv is None or sigma_tstar is None):
+        raise ValueError('sigma_dv and sigma_tstar are required when '
+                         'n_manoeuvres > 0')
+
+    n_aug = 6 + 4 * n_manoeuvres
+    P0 = np.zeros((n_aug, n_aug))
+    P0[:3, :3] = np.eye(3) * sigma_pos ** 2
+    P0[3:6, 3:6] = np.eye(3) * sigma_vel ** 2
+    for j in range(n_manoeuvres):
+        b = 6 + 4 * j
+        P0[b:b+3, b:b+3] = np.eye(3) * sigma_dv ** 2
+        P0[b+3, b+3] = sigma_tstar ** 2
+    return P0
+
+
 class SatelliteOrbitEKF(SatelliteOrbitFGO):
     """Extended Kalman Filter orbit state estimator.
 
@@ -33,23 +51,16 @@ class SatelliteOrbitEKF(SatelliteOrbitFGO):
         self.n_aug = 6 + self.n_man_params
 
         # Initial covariance
-        if P0 is not None:
-            self.P0 = P0.copy()
-        else:
-            self.P0 = self._default_P0()
+        if P0 is None:
+            raise ValueError('P0 is required; build it with build_P0()')
+        P0 = np.asarray(P0, dtype=float)
+        if P0.shape != (self.n_aug, self.n_aug):
+            raise ValueError(f'P0 must be {self.n_aug}x{self.n_aug} for '
+                             f'{self.n_manoeuvres} manoeuvre(s), '
+                             f'got {P0.shape}')
+        self.P0 = P0.copy()
 
         self.covariances = np.zeros((self.N, 6, 6))
-
-
-    def _default_P0(self):
-        P0 = np.zeros((self.n_aug, self.n_aug))
-        P0[:3, :3] = np.eye(3) * 1000.0**2
-        P0[3:6, 3:6] = np.eye(3) * 1.0**2
-        for j in range(self.n_manoeuvres):
-            b = 6 + 4 * j
-            P0[b:b+3, b:b+3] = np.eye(3) * 0.5**2
-            P0[b+3, b+3] = 120.0**2
-        return P0
 
     def compute_Q(self, state):
         """6x6 process noise covariance in ECI (rotated from RIC)."""

@@ -9,7 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 import yaml
-from Orbit_EKF import SatelliteOrbitEKF
+from Orbit_EKF import SatelliteOrbitEKF, build_P0
 from Orbit_FGO import ric_to_eci, eci_to_ric
 from fgo_pipeline import (
     load_propagator_output,
@@ -189,14 +189,9 @@ def run_ekf_with_propagator(config_path,
             print(f"     t* guess = {t_star_guess:.2f} s (error: {t_star_guess - t_star_true:.2f} s)")
 
     # P0: match the actual initial error magnitudes
-    n_aug = 6 + n_man_params
-    P0 = np.zeros((n_aug, n_aug))
-    P0[:3, :3] = np.eye(3) * initial_pos_error**2
-    P0[3:6, 3:6] = np.eye(3) * initial_vel_error**2
-    if n_man_params > 0:
-        P0[6:9, 6:9] = np.eye(3) * dv_initial_error**2
-        t_star_initial_error = config_params.get('t_star_initial_error', 60.0)
-        P0[9, 9] = t_star_initial_error**2
+    P0 = build_P0(n_man_params // 4, initial_pos_error, initial_vel_error,
+                  dv_initial_error,
+                  config_params.get('t_star_initial_error', 120.0))
 
     # Step 7: Run EKF
     ekf = SatelliteOrbitEKF(measurements, R, q_pos_ric, q_vel_ric,
