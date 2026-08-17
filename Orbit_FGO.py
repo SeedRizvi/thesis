@@ -176,7 +176,7 @@ class SatelliteOrbitFGO:
         self.create_init_state()
 
     def compute_S_Q_inv(self, state):
-        """Compute S_Q_inv = inv(chol(Q)) for a given state.
+        """Compute S_Q_inv = inv(chol(Q, lower=True)) for a given state.
 
         Rotates the RIC position and velocity process noise into ECI
         using the orbital state, then creates the full 6x6 Q matrix.
@@ -187,7 +187,7 @@ class SatelliteOrbitFGO:
         Q = np.zeros((6, 6))
         Q[:3, :3] = Q_pos_eci
         Q[3:, 3:] = Q_vel_eci
-        return la.inv(la.cholesky(Q))
+        return la.inv(la.cholesky(Q, lower=True))
 
     def create_init_state(self):
         for i in range(1, self.N):
