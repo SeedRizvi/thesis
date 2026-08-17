@@ -56,7 +56,7 @@ def run_bls_seed(seed, truth_states, times, dt, ground_stations, params,
     measurements, R = simulate_measurements(
         truth_states, times, ground_stations,
         params['measurement_noise_deg'],
-        use_range=True,
+        use_range=params['use_range'],
         range_noise_m=params['range_noise_m'],
     )
 
@@ -81,7 +81,7 @@ def run_bls_seed(seed, truth_states, times, dt, ground_stations, params,
         measurements, R,
         params['q_pos_ric'], params['q_vel_ric'],
         ground_stations, dt, x0=x0,
-        use_range=True, manoeuvres=manoeuvres,
+        use_range=params['use_range'], manoeuvres=manoeuvres,
         epsilon=params['epsilon'],
     )
 
@@ -166,7 +166,7 @@ def run_bls_seed(seed, truth_states, times, dt, ground_stations, params,
         'times': times,
         'dt': dt,
         'ground_stations': ground_stations,
-        'use_range': True,
+        'use_range': params['use_range'],
         't_star_true': t_star_true,
     }
     if mode == 'BLS-G' and manoeuvres is not None and delta_v_ric is not None:
@@ -290,14 +290,14 @@ def main():
                                               dtype=float),
             'q_vel_ric':             np.array(config_params['process_noise_vel'],
                                               dtype=float),
+            'use_range':             config_params['use_range'],
             'measurement_noise_deg': config_params['measurement_noise_deg'],
             'range_noise_m':         config_params['range_noise_m'],
             'initial_pos_error':     config_params['initial_pos_error'],
             'initial_vel_error':     config_params['initial_vel_error'],
-            'dv_initial_error':      config_params.get('dv_initial_error', 0.1),
-            't_star_initial_error':  config_params.get('t_star_initial_error',
-                                                       120.0),
-            'epsilon':               config_params.get('epsilon', 0.5),
+            'dv_initial_error':      config_params['dv_initial_error'],
+            't_star_initial_error':  config_params['t_star_initial_error'],
+            'epsilon':               config_params['epsilon'],
             'max_iterations':        config_params['max_iterations'],
         }
 

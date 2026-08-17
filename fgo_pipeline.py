@@ -135,43 +135,47 @@ def load_config_parameters(config_path):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
-    # Default parameters
-    params = {
-        'use_range': True,
-        'measurement_noise_deg': 0.00278,
-        'range_noise_m': 100.0,
-        'process_noise_pos': [0.01, 0.01, 0.01],
-        'process_noise_vel': [0.001, 0.001, 0.001],
-        'initial_pos_error': 1000.0,
-        'initial_vel_error': 1.0,
-        'max_iterations': 50,
-        'delta_v_ric': None,
-        'pm_duration': 0.85,
-        'epsilon': 0.5,
-        'dv_initial_error': 0.5,
-        't_star_initial_error': 120.0
-    }
+    # Required keys as (internal name, config name). No silent defaults: values
+    # that affect results must be stated in the config that documents the run.
+    REQUIRED_FGO = [
+        ('use_range', 'use_range'),
+        ('measurement_noise_deg', 'measurement_noise_deg'),
+        ('range_noise_m', 'range_noise_m'),
+        ('process_noise_pos', 'process_noise_position'),
+        ('process_noise_vel', 'process_noise_velocity'),
+        ('initial_pos_error', 'initial_position_error'),
+        ('initial_vel_error', 'initial_velocity_error'),
+    ]
+    REQUIRED_MANOEUVRE = [
+        ('delta_v_ric', 'delta_v_ric'),
+        ('pm_duration', 'pm_duration'),
+        ('epsilon', 'epsilon'),
+        ('dv_initial_error', 'dv_initial_error'),
+        ('t_star_initial_error', 't_star_initial_error'),
+    ]
 
-    # Load from config if available (defaults come from the `params` dict above)
-    if 'fgo_parameters' in config:
-        fgo_params = config['fgo_parameters']
-        params['use_range'] = fgo_params.get('use_range', params['use_range'])
-        params['measurement_noise_deg'] = fgo_params.get('measurement_noise_deg', params['measurement_noise_deg'])
-        params['range_noise_m'] = fgo_params.get('range_noise_m', params['range_noise_m'])
-        params['process_noise_pos'] = fgo_params.get('process_noise_position', params['process_noise_pos'])
-        params['process_noise_vel'] = fgo_params.get('process_noise_velocity', params['process_noise_vel'])
-        params['initial_pos_error'] = fgo_params.get('initial_position_error', params['initial_pos_error'])
-        params['initial_vel_error'] = fgo_params.get('initial_velocity_error', params['initial_vel_error'])
-        params['max_iterations'] = fgo_params.get('max_iterations', params['max_iterations'])
+    def read_required(section, section_name, pairs):
+        missing = [name for _, name in pairs if name not in section]
+        if missing:
+            raise KeyError(f"{config_path}: '{section_name}' is missing required "
+                           f"key(s): {', '.join(missing)}")
+        return {internal: section[name] for internal, name in pairs}
 
-    # Load manoeuvre parameters if available
+    if 'fgo_parameters' not in config:
+        raise KeyError(f"{config_path}: missing required section "
+                       f"'fgo_parameters'")
+
+    fgo_params = config['fgo_parameters']
+    params = read_required(fgo_params, 'fgo_parameters', REQUIRED_FGO)
+    params['max_iterations'] = fgo_params.get('max_iterations', 50)
+
+    # Manoeuvre section is optional, but must be complete when present
     if 'manoeuvre_parameters' in config:
-        manoeuvre_params = config['manoeuvre_parameters']
-        params['delta_v_ric'] = manoeuvre_params.get('delta_v_ric', params['delta_v_ric'])
-        params['pm_duration'] = manoeuvre_params.get('pm_duration', params['pm_duration'])
-        params['epsilon'] = manoeuvre_params.get('epsilon', params['epsilon'])
-        params['dv_initial_error'] = manoeuvre_params.get('dv_initial_error', params['dv_initial_error'])
-        params['t_star_initial_error'] = manoeuvre_params.get('t_star_initial_error', params['t_star_initial_error'])
+        params.update(read_required(config['manoeuvre_parameters'],
+                                    'manoeuvre_parameters',
+                                    REQUIRED_MANOEUVRE))
+    else:
+        params.update({internal: None for internal, _ in REQUIRED_MANOEUVRE})
 
     # Load ground stations if available
     ground_stations = None
@@ -187,7 +191,6 @@ def load_config_parameters(config_path):
 
 
 def run_fgo_with_propagator(config_path,
-                           use_range=None,
                            max_iterations=None,
                            verbose=True,
                            use_gaussian_estimation=True,
@@ -198,7 +201,6 @@ def run_fgo_with_propagator(config_path,
 
     Args:
         config_path: Path to orbit propagator config file
-        use_range: Whether to use range measurements (None to load from config)
         max_iterations: Maximum optimisation iterations (None to load from config)
         verbose: Print progress information
         use_gaussian_estimation: If True, use Gaussian impulse approximation to
@@ -221,7 +223,7 @@ def run_fgo_with_propagator(config_path,
     ground_stations = config_stations
 
     # Override config with CLI arguments if provided
-    use_range = use_range if use_range is not None else config_params['use_range']
+    use_range = config_params['use_range']
     max_iterations = max_iterations if max_iterations is not None else config_params['max_iterations']
     delta_v_ric = config_params['delta_v_ric']
 
@@ -344,8 +346,8 @@ def run_fgo_with_propagator(config_path,
     
     # Step 6: Run FGO
     manoeuvres = None
-    epsilon = epsilon_override if epsilon_override is not None else config_params.get('epsilon', 0.5)
-    dv_initial_error = config_params.get('dv_initial_error', 0.5)
+    epsilon = epsilon_override if epsilon_override is not None else config_params['epsilon']
+    dv_initial_error = config_params['dv_initial_error']
 
     t_star_true = None
     if delta_v_eci is not None and first_csv_path is not None:
@@ -356,7 +358,7 @@ def run_fgo_with_propagator(config_path,
         # Create initial guesses with noise (applied in ECI)
         dv_guess = delta_v_eci + np.random.normal(0, dv_initial_error, 3)
 
-        t_star_initial_error = config_params.get('t_star_initial_error', 60.0)
+        t_star_initial_error = config_params['t_star_initial_error']
         t_star_guess = t_star_true + np.random.normal(0, t_star_initial_error)
 
         manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
@@ -631,8 +633,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run Factor Graph Optimisation')
     parser.add_argument('--config', type=str, default='configs/config_geo_realistic.yml',
                        help='Path to orbit propagator config file')
-    parser.add_argument('--no-range', dest='use_range', action='store_false', default=True,
-                       help='Disable range measurements (range enabled by default)')
     parser.add_argument('--max-iters', type=int, default=None,
                        help='Maximum optimisation iterations')
     parser.add_argument('--quiet', action='store_true',
@@ -651,7 +651,6 @@ if __name__ == '__main__':
     # Run FGO pipeline
     results = run_fgo_with_propagator(
         config_path=args.config,
-        use_range=args.use_range,
         max_iterations=args.max_iters,
         verbose=not args.quiet,
         use_gaussian_estimation=args.use_gaussian,

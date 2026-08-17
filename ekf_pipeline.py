@@ -20,7 +20,6 @@ from fgo_pipeline import (
 
 
 def run_ekf_with_propagator(config_path,
-                            use_range=None,
                             verbose=True,
                             use_gaussian_estimation=True):
     """
@@ -40,8 +39,7 @@ def run_ekf_with_propagator(config_path,
         )
     ground_stations = config_stations
 
-    # Override config with CLI arguments if provided
-    use_range = use_range if use_range is not None else config_params['use_range']
+    use_range = config_params['use_range']
     delta_v_ric = config_params['delta_v_ric']
 
     # Load all other parameters from config
@@ -160,8 +158,9 @@ def run_ekf_with_propagator(config_path,
 
     # Step 6: Setup manoeuvres and initial covariance
     manoeuvres = None
-    epsilon = config_params.get('epsilon', 0.5)
-    dv_initial_error = config_params.get('dv_initial_error', 0.5)
+    epsilon = config_params['epsilon']
+    dv_initial_error = config_params['dv_initial_error']
+    t_star_initial_error = config_params['t_star_initial_error']
 
     t_star_true = None
     if delta_v_eci is not None and first_csv_path is not None:
@@ -173,7 +172,6 @@ def run_ekf_with_propagator(config_path,
     if delta_v_eci is not None and first_csv_path is not None and use_gaussian_estimation:
         dv_guess = delta_v_eci + np.random.normal(0, dv_initial_error, 3)
 
-        t_star_initial_error = config_params.get('t_star_initial_error', 60.0)
         t_star_guess = t_star_true + np.random.normal(0, t_star_initial_error)
 
         manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
@@ -190,8 +188,7 @@ def run_ekf_with_propagator(config_path,
 
     # P0: match the actual initial error magnitudes
     P0 = build_P0(n_man_params // 4, initial_pos_error, initial_vel_error,
-                  dv_initial_error,
-                  config_params.get('t_star_initial_error', 120.0))
+                  dv_initial_error, t_star_initial_error)
 
     # Step 7: Run EKF
     ekf = SatelliteOrbitEKF(measurements, R, q_pos_ric, q_vel_ric,
@@ -269,8 +266,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run Extended Kalman Filter')
     parser.add_argument('--config', type=str, default='configs/config_geo_one_rev_deltaRIC1.yml',
                         help='Path to orbit config file')
-    parser.add_argument('--no-range', dest='use_range', action='store_false', default=True,
-                        help='Disable range measurements')
     parser.add_argument('--quiet', action='store_true',
                         help='Suppress verbose output')
     parser.add_argument('--no-gaussian', dest='use_gaussian', action='store_false', default=True,
@@ -282,7 +277,6 @@ if __name__ == '__main__':
 
     results = run_ekf_with_propagator(
         config_path=args.config,
-        use_range=args.use_range,
         verbose=not args.quiet,
         use_gaussian_estimation=args.use_gaussian
     )

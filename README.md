@@ -144,7 +144,6 @@ All FGO parameters (noise levels, errors, etc.) are configured via the config fi
 The following CLI options are available:
 
 - `--config PATH` - Path to configuration file (default: `configs/config_geo_realistic.yml`)
-- `--no-range` - Disable range measurements, use angular-only
 - `--max-iters N` - Override maximum optimisation iterations from config
 - `--quiet` - Suppress verbose output
 
@@ -152,9 +151,6 @@ The following CLI options are available:
 ```bash
 # Use a custom configuration file
 python fgo_pipeline.py --config configs/your_config_file.yml
-
-# Disable range measurements
-python fgo_pipeline.py --no-range
 
 # Override max iterations and run quietly
 python fgo_pipeline.py --max-iters 100 --quiet

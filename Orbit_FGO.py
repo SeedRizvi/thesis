@@ -109,24 +109,21 @@ class SatelliteOrbitFGO:
         self.n_stations = len(ground_stations)
         self.use_range = use_range
         
-        # Auto-detect measurement type based on data size
         if meas_per_station is None:
-            total_meas = len(meas)
-            # Try to figure out if we have 2 (az/el) or 3 (az/el/range) measurements
-            if total_meas % (self.n_stations * 3) == 0:
-                self.meas_per_station = 3
-                self.use_range = True
-                print("Detected 3 measurements per station (azimuth, elevation, range)")
-            elif total_meas % (self.n_stations * 2) == 0:
-                self.meas_per_station = 2
-                self.use_range = False
-                print("Detected 2 measurements per station (azimuth, elevation only)")
-            else:
-                raise ValueError(f"Cannot determine measurement type from data size {total_meas}")
+            self.meas_per_station = 3 if use_range else 2
         else:
             self.meas_per_station = meas_per_station
-            
-        self.N = len(meas) // (self.n_stations * self.meas_per_station)
+            self.use_range = (meas_per_station == 3)
+
+        if R.shape[0] != self.meas_per_station:
+            raise ValueError(f"R is {R.shape[0]}x{R.shape[1]} but "
+                             f"meas_per_station={self.meas_per_station}")
+
+        block = self.n_stations * self.meas_per_station
+        if len(meas) % block != 0:
+            raise ValueError(f"len(meas)={len(meas)} is not a multiple of "
+                             f"{block} (n_stations x meas_per_station)")
+        self.N = len(meas) // block
         self.dt = dt
         
         self.prop_dt = self.dt
@@ -141,17 +138,7 @@ class SatelliteOrbitFGO:
         self.q_pos_ric = np.array(q_pos_ric, dtype=float)
         self.q_vel_ric = np.array(q_vel_ric, dtype=float)
         
-        # Handle R matrix for different measurement types
-        # TODO: Confirm if needed, or just remove
-        if self.use_range and R.shape[0] == 2:
-            # Extend R matrix for range measurements
-            R_extended = np.eye(3)
-            R_extended[:2, :2] = R
-            R_extended[2, 2] = 100.0**2  # TODO: 100m range noise (ADJUSTABLE)
-            self.S_R_inv = la.inv(la.cholesky(R_extended))
-            print(f"Extended R matrix for range with 100m std dev")
-        else:
-            self.S_R_inv = la.inv(la.cholesky(R))
+        self.S_R_inv = la.inv(la.cholesky(R))
 
         self.states = np.zeros((self.N, 6))
         if x0 is not None:
