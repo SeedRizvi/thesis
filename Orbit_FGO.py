@@ -604,8 +604,7 @@ class SatelliteOrbitFGO:
             if best_scale > 0:
                 self.update_state(delta_x * best_scale)
                 
-                if best_cost < current_cost * 0.9:
-                    lambda_reg = max(lambda_reg * 0.5, 1e-10)
+                lambda_reg = max(lambda_reg * 0.5, 1e-10)
                 
                 if verbose:
                     print(f'  delta norm: {la.norm(delta_x * best_scale):.2e}, scale: {best_scale:.3f}')

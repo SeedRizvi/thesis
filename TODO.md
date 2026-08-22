@@ -7,3 +7,8 @@
   defaults every key, but callers re-fetch with disagreeing values (dv: 0.1 in mc_*, 0.5 in
   pipelines; t*: 60.0 at ekf_pipeline.py:176 vs 120.0 at :194). Dead code today, but
   misleading and would diverge if anything ever bypasses the loader.
+- Revisit the LM lambda shrink rate in Orbit_FGO.opt(). The gate on the decrease is gone,
+  but the rate is still /2 while the growth branch is *10. Symmetric *10 //10 is the
+  standard LM form and on short-arc angles-only it was decisive (seed 1: 13008 m at /2 vs
+  1892 m at /10). Not adopted yet because short-arc is the config built to favour BLS, so
+  tuning a global solver constant on it risks overfitting. Decide from one_rev evidence.
