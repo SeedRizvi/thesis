@@ -12,3 +12,8 @@
   standard LM form and on short-arc angles-only it was decisive (seed 1: 13008 m at /2 vs
   1892 m at /10). Not adopted yet because short-arc is the config built to favour BLS, so
   tuning a global solver constant on it risks overfitting. Decide from one_rev evidence.
+- Consider a relative, dimensionally-consistent step-convergence test in Orbit_FGO.opt().
+  The existing `la.norm(delta_x * best_scale) < 1e-3` sums metres, m/s and seconds over
+  ~1300-9946 variables, so it is both dimensionally incoherent and extremely tight (tens
+  of microns per component). It errs conservative so it is not a correctness risk, but it
+  rarely fires, which leaves the stagnation counter as the effective convergence criterion.

@@ -547,6 +547,7 @@ class SatelliteOrbitFGO:
         finished = False
         num_iters = 0
         lambda_reg = 1e-6
+        stalled = 0
         
         while not finished:
             L = self.create_L()
@@ -615,13 +616,16 @@ class SatelliteOrbitFGO:
             
             num_iters += 1
             
-            if la.norm(delta_x * best_scale) < 1e-3 or num_iters >= max_iters:
+            if (current_cost - best_cost) / current_cost < 1e-6:
+                stalled += 1
+            else:
+                stalled = 0
+            
+            if best_scale > 0 and la.norm(delta_x * best_scale) < 1e-3:
                 finished = True
             
-            if best_cost >= current_cost * 0.999 and num_iters > 5:
-                if verbose:
-                    print(f'Converged: no significant improvement')
-                break
+            if num_iters >= max_iters or lambda_reg > 1e10 or stalled >= 10:
+                finished = True
         
         if verbose:
             print(f'\nOptimisation finished after {num_iters} iterations')
