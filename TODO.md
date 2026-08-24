@@ -1,5 +1,8 @@
 - Update project structure in README. Also mention where the manuscript results are in the repo.
-- Remove the deprecated/unused substepping leftovers.
+- Remove the deprecated/unused substepping leftovers. NOTE: sub-stepping was previously
+  thought to fix the manoeuvre-step dynamics error. It does not -- see ANGLES_ONLY_FGO.md.
+  The 36.7 m error is model mismatch (Gaussian vs instantaneous delta-v), not integration
+  error; sub-stepping removes only 0.54 m of it.
 - Investigate t* estimation bias in EKF-G. Mean signed error is -20.6s (old P0) / -29.3s
   (config P0) over 8 seeds on deltaRIC0.5, with a -157s outlier. The 120s t* prior is not
   the binding constraint, so this looks separate from the P0 work.
