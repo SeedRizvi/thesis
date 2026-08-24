@@ -132,6 +132,7 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
         lambda_reg = 1e-6
         finished = False
         num_iters = 0
+        stalled = 0
 
         while not finished:
             J, r = self._compute_jacobian()
@@ -207,8 +208,7 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
                     self.man_params[:] = man_save - delta_p[6:] * best_scale
                 self._propagate_trajectory()
 
-                if best_cost < current_cost * 0.9:
-                    lambda_reg = max(lambda_reg * 0.5, 1e-10)
+                lambda_reg = max(lambda_reg * 0.5, 1e-10)
 
                 if verbose:
                     print(f'  delta norm: {la.norm(delta_p * best_scale):.2e}, scale: {best_scale:.3f}')
@@ -224,13 +224,16 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
             num_iters += 1
 
-            if la.norm(delta_p * best_scale) < 1e-3 or num_iters >= max_iters:
+            if (current_cost - best_cost) / current_cost < 1e-6:
+                stalled += 1
+            else:
+                stalled = 0
+
+            if best_scale > 0 and la.norm(delta_p * best_scale) < 1e-3:
                 finished = True
 
-            if best_cost >= current_cost * 0.999 and num_iters > 5:
-                if verbose:
-                    print(f'Converged: no significant improvement')
-                break
+            if num_iters >= max_iters or lambda_reg > 1e10 or stalled >= 10:
+                finished = True
 
         if verbose:
             print(f'\nBLS finished after {num_iters} iterations')
