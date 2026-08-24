@@ -23,7 +23,7 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
                  manoeuvres=None, epsilon=0.5):
 
         super().__init__(meas, R, q_pos_ric, q_vel_ric, ground_stations,
-                         dt, x0, use_range, meas_per_station, manoeuvres,
+                         dt, x0, P0, use_range, meas_per_station, manoeuvres,
                          epsilon)
 
         # Reconstruct R covariance from parent's S_R_inv = inv(chol(R))
@@ -33,17 +33,6 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
         # Solve-vector dimension: 6 (initial state) + 4 per manoeuvre
         self.n_solve = 6 + self.n_man_params
-
-        # Prior on the full solve vector, frozen at construction
-        if P0 is None:
-            raise ValueError('P0 is required; build it with build_P0()')
-        P0 = np.asarray(P0, dtype=float)
-        if P0.shape != (self.n_solve, self.n_solve):
-            raise ValueError(f'P0 must be {self.n_solve}x{self.n_solve} for '
-                             f'{self.n_manoeuvres} manoeuvre(s), got {P0.shape}')
-        self.S_P0_inv = la.inv(la.cholesky(P0, lower=True))
-        self.gamma = np.concatenate([self.states[0].copy(),
-                                     self.man_params.copy()])
 
 
     # Propagate full trajectory from x0 + current man_params

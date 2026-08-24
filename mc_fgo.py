@@ -26,6 +26,7 @@ import yaml
 from fgo_pipeline import (load_propagator_output, load_config_parameters,
                           simulate_measurements, plot_fgo_results)
 from Orbit_FGO import SatelliteOrbitFGO, eci_to_ric, ric_to_eci
+from Orbit_EKF import build_P0
 from propagator import OrbitPropagator
 
 
@@ -173,10 +174,16 @@ def run_fgo_seed(seed, truth_states, times, dt, ground_stations, params,
         manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
         dv_guess_err_ric = eci_to_ric(dv_noise, manoeuvre_state)
 
+    P0 = build_P0(
+        0 if manoeuvres is None else len(manoeuvres),
+        params['initial_pos_error'], params['initial_vel_error'],
+        params['dv_initial_error'], params['t_star_initial_error'],
+    )
+
     fgo = SatelliteOrbitFGO(
         measurements, R,
         params['q_pos_ric'], params['q_vel_ric'],
-        ground_stations, dt, x0=x0,
+        ground_stations, dt, x0=x0, P0=P0,
         use_range=params['use_range'], manoeuvres=manoeuvres,
         epsilon=params['epsilon'],
     )

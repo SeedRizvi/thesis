@@ -43,7 +43,7 @@ def measure_ric_mismatch(config_path, dt_val=60.0):
 
     fgo = SatelliteOrbitFGO(
         dummy_meas, dummy_R, q_pos_ric, q_vel_ric, ground_stations,
-        dt=dt_val, x0=truth_states[0],
+        dt=dt_val, x0=truth_states[0], P0=np.eye(6) * 1e12,
         use_range=True, manoeuvres=None,
     )
 

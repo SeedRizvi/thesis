@@ -40,7 +40,7 @@ class SatelliteOrbitEKF(SatelliteOrbitFGO):
 
         # Parent sets up physics, noise, manoeuvre params, constants, etc.
         super().__init__(meas, R, q_pos_ric, q_vel_ric, ground_stations,
-                         dt, x0, use_range, meas_per_station, manoeuvres,
+                         dt, x0, P0, use_range, meas_per_station, manoeuvres,
                          epsilon)
 
         # Reconstruct R covariance from parent's S_R_inv = inv(chol(R))
@@ -50,15 +50,8 @@ class SatelliteOrbitEKF(SatelliteOrbitFGO):
         # Augmented state dimension
         self.n_aug = 6 + self.n_man_params
 
-        # Initial covariance
-        if P0 is None:
-            raise ValueError('P0 is required; build it with build_P0()')
-        P0 = np.asarray(P0, dtype=float)
-        if P0.shape != (self.n_aug, self.n_aug):
-            raise ValueError(f'P0 must be {self.n_aug}x{self.n_aug} for '
-                             f'{self.n_manoeuvres} manoeuvre(s), '
-                             f'got {P0.shape}')
-        self.P0 = P0.copy()
+        # Initial covariance (validated by the parent)
+        self.P0 = np.asarray(P0, dtype=float).copy()
 
         self.covariances = np.zeros((self.N, 6, 6))
 

@@ -11,6 +11,7 @@ import yaml
 from math import pi, atan2, sin, cos, sqrt
 import matplotlib.pyplot as plt
 from Orbit_FGO import SatelliteOrbitFGO, ric_to_eci, eci_to_ric, eci_to_ric_rotation_matrix
+from Orbit_EKF import build_P0
 
 
 def load_propagator_output(csv_path):
@@ -348,6 +349,7 @@ def run_fgo_with_propagator(config_path,
     manoeuvres = None
     epsilon = epsilon_override if epsilon_override is not None else config_params['epsilon']
     dv_initial_error = config_params['dv_initial_error']
+    t_star_initial_error = config_params['t_star_initial_error']
 
     t_star_true = None
     if delta_v_eci is not None and first_csv_path is not None:
@@ -358,7 +360,6 @@ def run_fgo_with_propagator(config_path,
         # Create initial guesses with noise (applied in ECI)
         dv_guess = delta_v_eci + np.random.normal(0, dv_initial_error, 3)
 
-        t_star_initial_error = config_params['t_star_initial_error']
         t_star_guess = t_star_true + np.random.normal(0, t_star_initial_error)
 
         manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
@@ -372,8 +373,12 @@ def run_fgo_with_propagator(config_path,
             print(f"     t* true  = {t_star_true:.2f} s")
             print(f"     t* guess = {t_star_guess:.2f} s (error: {t_star_guess - t_star_true:.2f} s)")
 
+    P0 = build_P0(0 if manoeuvres is None else len(manoeuvres),
+                  initial_pos_error, initial_vel_error,
+                  dv_initial_error, t_star_initial_error)
+
     fgo = SatelliteOrbitFGO(measurements, R, q_pos_ric, q_vel_ric,
-                            ground_stations, dt, x0=x0,
+                            ground_stations, dt, x0=x0, P0=P0,
                             use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon,
                             use_substep=use_substep)
     fgo.opt(max_iters=max_iterations, verbose=verbose)

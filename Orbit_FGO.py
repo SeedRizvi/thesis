@@ -99,6 +99,7 @@ class SatelliteOrbitFGO:
                  ground_stations: list,
                  dt: float = 60.0,
                  x0: np.array = None,
+                 P0: np.array = None,
                  use_range: bool = True,
                  meas_per_station: int = None,
                  manoeuvres=None,
@@ -159,6 +160,18 @@ class SatelliteOrbitFGO:
         for j, man in enumerate(self.manoeuvres):
             self.man_params[4*j:4*j+3] = man['delta_v']
             self.man_params[4*j+3] = man['t_star']
+
+        # Prior on the augmented initial parameters, frozen at construction
+        self.n_prior = 6 + self.n_man_params
+        if P0 is None:
+            raise ValueError('P0 is required; build it with build_P0()')
+        P0 = np.asarray(P0, dtype=float)
+        if P0.shape != (self.n_prior, self.n_prior):
+            raise ValueError(f'P0 must be {self.n_prior}x{self.n_prior} for '
+                             f'{self.n_manoeuvres} manoeuvre(s), got {P0.shape}')
+        self.S_P0_inv = la.inv(la.cholesky(P0, lower=True))
+        self.gamma = np.concatenate([self.states[0].copy(),
+                                     self.man_params.copy()])
 
         self.create_init_state()
 
@@ -403,13 +416,17 @@ class SatelliteOrbitFGO:
         H_size = n_meas * 6
         F_size = 36
         F_man_size = 6 * self.n_man_params  # entries per manoeuvre Jacobian block
-        nnz_entries = (2 * F_size + F_man_size) * (self.N - 1) + H_size * self.N * self.n_stations
+        nnz_entries = ((2 * F_size + F_man_size) * (self.N - 1)
+                       + H_size * self.N * self.n_stations
+                       + self.n_prior * self.n_prior)
         data_l = np.zeros(nnz_entries)
         row_l = np.zeros(nnz_entries, dtype=int)
         col_l = np.zeros(nnz_entries, dtype=int)
         t_e = 0
 
-        n_rows = 6 * (self.N - 1) + self.N * self.n_stations * self.meas_per_station
+        n_rows = (6 * (self.N - 1)
+                  + self.N * self.n_stations * self.meas_per_station
+                  + self.n_prior)
         n_cols = 6 * self.N + self.n_man_params
 
         for i in range(1, self.N):
@@ -441,6 +458,19 @@ class SatelliteOrbitFGO:
                     dense_2_sp_lists(mat, row_offset, self.state_idx(i))
                 t_e += H_size
 
+        prior_row = n_rows - self.n_prior
+        blk = self.S_P0_inv[:, :6]
+        n_b = blk.size
+        data_l[t_e:t_e+n_b], row_l[t_e:t_e+n_b], col_l[t_e:t_e+n_b] = \
+            dense_2_sp_lists(blk, prior_row, 0)
+        t_e += n_b
+        if self.n_man_params > 0:
+            blk = self.S_P0_inv[:, 6:]
+            n_b = blk.size
+            data_l[t_e:t_e+n_b], row_l[t_e:t_e+n_b], col_l[t_e:t_e+n_b] = \
+                dense_2_sp_lists(blk, prior_row, self.man_param_col_start())
+            t_e += n_b
+
         return sp.csr_matrix((data_l[:t_e], (row_l[:t_e], col_l[:t_e])),
                              shape=(n_rows, n_cols))
 
@@ -455,7 +485,9 @@ class SatelliteOrbitFGO:
         else:
             state_data = self.states
         
-        y = np.zeros(6 * (self.N - 1) + self.N * self.n_stations * self.meas_per_station)
+        y = np.zeros(6 * (self.N - 1)
+                     + self.N * self.n_stations * self.meas_per_station
+                     + self.n_prior)
         
         for i in range(1, self.N):
             t_start = (i - 1) * self.dt
@@ -499,6 +531,9 @@ class SatelliteOrbitFGO:
                 
                 y_start = self.meas_idx(i) + s_idx * self.meas_per_station
                 y[y_start:y_start+len(residual)] = self.S_R_inv @ residual
+
+        p = np.concatenate([state_data[0], self.man_params])
+        y[-self.n_prior:] = self.S_P0_inv @ (self.gamma - p)
 
         # Restore manoeuvre params if we temporarily changed them
         if saved_man_params is not None:
