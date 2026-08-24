@@ -19,7 +19,7 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
         pass
 
     def __init__(self, meas, R, q_pos_ric, q_vel_ric, ground_stations,
-                 dt=60.0, x0=None, use_range=True, meas_per_station=None,
+                 dt=60.0, x0=None, P0=None, use_range=True, meas_per_station=None,
                  manoeuvres=None, epsilon=0.5):
 
         super().__init__(meas, R, q_pos_ric, q_vel_ric, ground_stations,
@@ -33,6 +33,17 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
         # Solve-vector dimension: 6 (initial state) + 4 per manoeuvre
         self.n_solve = 6 + self.n_man_params
+
+        # Prior on the full solve vector, frozen at construction
+        if P0 is None:
+            raise ValueError('P0 is required; build it with build_P0()')
+        P0 = np.asarray(P0, dtype=float)
+        if P0.shape != (self.n_solve, self.n_solve):
+            raise ValueError(f'P0 must be {self.n_solve}x{self.n_solve} for '
+                             f'{self.n_manoeuvres} manoeuvre(s), got {P0.shape}')
+        self.S_P0_inv = la.inv(la.cholesky(P0, lower=True))
+        self.gamma = np.concatenate([self.states[0].copy(),
+                                     self.man_params.copy()])
 
 
     # Propagate full trajectory from x0 + current man_params
@@ -48,11 +59,12 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
         """Compute weighted measurement residual vector.
 
         Returns the stacked residual  r = W^{1/2} (z - h(x))  for all
-        time-steps and stations, where W = R^{-1}.
+        time-steps and stations, where W = R^{-1}, followed by the prior
+        residual  S_P0_inv (gamma - p)  on the solve vector.
         """
         from math import pi
         n_meas = self.meas_per_station
-        total = self.N * self.n_stations * n_meas
+        total = self.N * self.n_stations * n_meas + self.n_solve
         residuals = np.zeros(total)
 
         for i in range(self.N):
@@ -73,6 +85,9 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
                 r_start = i * self.n_stations * n_meas + s_idx * n_meas
                 residuals[r_start:r_start + n_meas] = self.S_R_inv @ innov
+
+        p = np.concatenate([self.states[0], self.man_params])
+        residuals[-self.n_solve:] = self.S_P0_inv @ (self.gamma - p)
 
         return residuals
 
