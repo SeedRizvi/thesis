@@ -56,10 +56,12 @@ class SatelliteOrbitEKF(SatelliteOrbitFGO):
         self.covariances = np.zeros((self.N, 6, 6))
 
     def compute_Q(self, state):
-        """6x6 process noise covariance in ECI (rotated from RIC)."""
+        """6x6 process noise covariance in ECI (rotated from RIC).
+        q_pos_ric / q_vel_ric are per-axis standard deviations.
+        """
         T = eci_to_ric_rotation_matrix(state)
-        Q_pos_eci = T.T @ np.diag(self.q_pos_ric) @ T
-        Q_vel_eci = T.T @ np.diag(self.q_vel_ric) @ T
+        Q_pos_eci = T.T @ np.diag(self.q_pos_ric ** 2) @ T
+        Q_vel_eci = T.T @ np.diag(self.q_vel_ric ** 2) @ T
         Q = np.zeros((6, 6))
         Q[:3, :3] = Q_pos_eci
         Q[3:, 3:] = Q_vel_eci
