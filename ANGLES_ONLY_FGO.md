@@ -1,282 +1,352 @@
-# Angles-Only FGO — Current Issue and Future Work
+# Angles-Only FGO — Current Status
 
-Status as of 2026-08-24. Written as a handoff; all numbers below are measured,
-not estimated.
+Status as of 2026-08-25. All numbers below are measured on
+`configs/config_geo_one_rev_deltaRIC0.5.yml`, angles-only, FGO-G, with prior,
+10 seeds, unless stated otherwise.
+
+**This revision supersedes the 2026-08-24 version.** Its central claim — that
+2 arcsec causes a catastrophic instability in 4 of 10 seeds — was wrong. The
+failures were an iteration-budget artefact. See section 2.
 
 ---
 
 ## 1. Where things stand
 
-Angles-only estimation works. The large improvement this session came from the
-solver fixes (Cholesky whitening, LM termination, prior), not from the
-measurement model.
+Angles-only estimation works, and sharper measurements help uniformly.
 
-deltaRIC0.5, one revolution, FGO-G, angles-only, position RMS:
+Converged (`max_iters` raised until every seed terminates on its own),
+after the Q units fix, over the 9 seeds that converge in both versions:
 
-| angular noise | median | mean | notes |
+| | before Q fix | after Q fix | |
 |---|---|---|---|
-| 10 arcsec (historical, pre-fixes) | ~85 km | — | what motivated this work |
-| 10 arcsec (current) | 246 m | 321 m | 10 seeds, with prior |
-| 2 arcsec (current) | 164 m | 495 m | 10 seeds, with prior, **4/10 unstable** |
-| 1 arcsec | not tested | — | historical memory of ~80 m |
+| 10 arcsec mean | 232.96 m | **160.02 m** | -31% |
+| 2 arcsec mean | 126.29 m | **55.53 m** | -56% |
+| 2 arcsec median | 121.3 m | **50.6 m** | -58% |
 
-FGO-B (no manoeuvre estimation) behaves cleanly at 2 arcsec: -61% versus
-10 arcsec, consistent across all seeds, no failures. The instability is
-specific to FGO-G, i.e. to estimating `(delta-v, t*)` from angles alone.
+The 10" -> 2" improvement is **-65%** after the fix (-46% before it).
 
-Ground-station geometry (Rocky Point -> Siding Spring, with real altitudes) was
-tested in isolation: -4.7% for FGO-B, -7.9% for FGO-G. Marginal. Not a priority.
+Every seed improves from 10" to 2". There is no instability.
 
 ---
 
-## 2. The issue
+## 2. The "catastrophic failure" was the iteration budget
 
-### Symptom
+`max_iterations: 50` was too small for roughly a third of 2 arcsec seeds.
+The same 20 runs, scored at iteration 50 versus at convergence (pre-Q-fix):
 
-At 2 arcsec, 4 of 10 seeds degrade badly (+340%, +291%, +108%, +108%) while the
-other 6 improve substantially (-7% to -72%). Failure does not correlate with the
-initial guess quality:
-
-```
-corr(|guess dv|,     paired change) = -0.110
-corr(|guess t*|,     paired change) = -0.161
-corr(pos_rms at 10", paired change) = -0.052
-```
-
-### The prior is NOT the cause
-
-A full 2x2 ({prior, no prior} x {10", 2"}) over 10 seeds:
-
-| | mean | median | failures >50% worse |
+| budget | 10" mean | 2" mean | apparent effect of sharper measurements |
 |---|---|---|---|
-| no prior, 10"->2" | +762% | -44.5% | 2/10 |
-| prior, 10"->2"    | +60%  | -15.7% | 4/10 |
+| 50 iters | 321.1 m | 323.8 m | **+0.8%** — no benefit, 3 blow-ups |
+| converged | 234.3 m | 125.7 m | **-46%** — uniform benefit |
 
-Failures occur in both arms. The no-prior arm contains the single worst result
-of the whole study (seed 4, 11,928 m). The prior reduces mean error 2.8x at
-10 arcsec and 3.1x at 2 arcsec, and cuts the worst case ~5x. It trades a little
-median performance for a much shorter tail — the same shrinkage behaviour seen
-in the EKF P0 fix and the BLS prior work.
+Same code, same seeds, same data. Only the cap differs.
 
-### Root cause: the Gaussian impulse does not match the truth manoeuvre
+The three "failures" at 2 arcsec converge cleanly given budget:
 
-The truth propagator applies an **instantaneous** delta-v at t*. The FGO models
-it as a **Gaussian of width epsilon = 30 s centred on t***. Because the pulse is
-centred on t*, half the impulse is applied *before* the manoeuvre actually
-occurs.
+| seed | @50 iters | converged | iters needed |
+|---|---|---|---|
+| 1 | 765.04 m, `dyn 1.6e3` | 112.53 m, `dyn 1.0e1` | 141 |
+| 7 | 1031.44 m, `dyn 3.1e3` | 94.05 m, `dyn 1.3e1` | 64 |
+| 8 | 511.74 m, `dyn 7.0e3` | 120.54 m, `dyn 1.3e1` | 72 |
 
-Evaluating the FGO's dynamics residuals at the TRUE trajectory with TRUE
-manoeuvre parameters:
+All three land in the same basin as the seeds that converge inside 50
+iterations, at the *good* end of the distribution. There is no second basin and
+no local minimum. The 10 arcsec arm is affected too: seed 7 reads 1089.91 m at
+50 iterations and 221.56 m converged, so the previously published 246 m median
+was itself depressed by an unconverged seed.
+
+**Caveat: `cost_dyn` alone does not indicate convergence.** `create_init_state`
+builds the initial trajectory with the same propagator the dynamics residual
+uses, so that trajectory is dynamically self-consistent by construction
+(`cost_dyn` ~ 1e-6) while being ~24 km from truth — a 1 m/s initial velocity
+error integrates to ~99 km over the 27.6 h arc. Low `cost_dyn` is only
+meaningful alongside low position error.
+
+---
+
+## 3. Defects found and fixed
+
+### 3.1 Q was a standard deviation consumed as a variance (HIGH impact)
+
+`calibrate_q_ric.py` emits `5 * sqrt(mean(err**2))` — five times the RMS
+mismatch in **metres**, a standard deviation. `compute_S_Q_inv` placed it
+directly into the diagonal of Q, where entries are variances.
+
+```
+effective sigma was sqrt(5.222e-4) = 0.0229 m, not 5.222e-4 m
+position: 43.8x / 52.3x / 67.9x too loose   (R / I / C)
+velocity: 239.6x / 287.5x / 372.0x too loose
+```
+
+Cross-check confirming the intended reading: `q_pos/5 = 1.044e-4 m` matches the
+measured smooth-flight per-step mismatch of 1.35e-4 m. Read as a variance, the
+implied sigma would have been 170x the mismatch it was calibrated against.
+
+The inflation factor is `1/sqrt(q)`, so it differed per axis and **flattened the
+R:I:C anisotropy** that `calibrate_q_ric.py` exists to measure: position
+1:0.701:0.415 became 1:0.837:0.644, velocity likewise. A deliberate safety
+factor would have been uniform.
+
+Fixed by squaring in `compute_S_Q_inv` **and** in `Orbit_EKF.compute_Q`, which
+carries its own duplicate of the same code. Configs now state that the values
+are standard deviations.
+
+**Effect:** large accuracy gain (section 1) but a markedly stiffer problem —
+see section 4.
+
+**Note:** this changes EKF and BLS results too. Those Monte Carlos have not been
+re-run.
+
+### 3.2 Termination criteria unsuited to the problem
+
+Both tests in `opt()` were replaced:
+
+- `la.norm(delta_x * best_scale) < 1e-3` summed metres, m/s and seconds over
+  9,946 variables — dimensionally incoherent, and so tight it rarely fired.
+- `stalled`: 10 *consecutive* iterations each below 1e-6 relative cost. This
+  terminated any well-damped variant at exactly iteration 10, before it could
+  do anything.
+
+Replaced with `CONV_REL_PRED` on the model's predicted relative cost reduction
+(dimensionless, hence invariant to how Q and R scale the whitened rows) plus a
+*cumulative* windowed stagnation backstop. Measured separation justifying the
+1e-8 threshold:
+
+```
+still making progress : rel_pred = 1e-3 .. 1e-1
+converged             : rel_pred = 1e-11 .. 1e-13
+```
+
+**Effect:** identical answers (max change 0.01 m over 40 runs), 7-10% fewer
+iterations, 16-22% less CPU.
+
+### 3.3 Line search could discard a better step
+
+The acceptance branch overwrote `best_scale` unconditionally, so a smaller
+scale passing the ratio test could replace a larger scale that had already
+achieved a lower cost. Fixed by deleting the assignment; the tracking above it
+was already correct.
+
+**Effect:** fired on 4 of 20 runs but changed only the path, never the
+destination (0/20 seeds changed position error), costing 1-6 extra iterations.
+Kept as a correctness fix, not an improvement.
+
+---
+
+## 4. What remains broken
+
+### 4.1 The solver diverges on stiff seeds
+
+After the Q fix:
+
+| budget | 10" diverged | 2" diverged |
+|---|---|---|
+| 50 iters | 3/10 | 3/10 |
+| 300 iters | 1/10 (seed 8) | 1/10 (seed 8) |
+
+Seed 8 fails in both arms — 300 iterations ending at `cost_dyn` 6.0e4 (10") and
+9.4e5 (2"), against ~1e-2 for converged seeds. It converged in 23 iterations
+before the Q fix. Iteration counts rose broadly (10" s10 18->150, 2" s6
+48->187), which is the expected cost of dynamics rows 44x-240x stronger.
+
+### 4.2 `opt()` is not Levenberg-Marquardt
+
+Measured across 20+ runs: `lambda_max = 5.0e-07`. Lambda never rises above its
+initial 1e-6 and reaches the 1e-10 floor by iteration ~13. The growth branch
+only fires when `best_scale == 0` — the line search failing across all 20
+halvings — which never happened (`rejections = 0` in every run). **The solver
+is Gauss-Newton with backtracking; the damping is vestigial.**
+
+Curvature at iteration 0 (2 arcsec, `M.diagonal()`):
+
+```
+pos   median  5.18e+03
+vel   median  9.49e+06
+dv    median  1.35e+06
+t*            2.53e+02     <- 3.7e4x smaller than velocity
+```
+
+So if lambda ever did grow, `lambda * I` would annihilate `t*` first — the one
+parameter being estimated. Any fix to the lambda update must come with
+curvature-scaled damping, not after it.
+
+### 4.3 The objective is a long flat valley
+
+For seed 1 at 2 arcsec, between iteration 50 and convergence:
+
+```
+cost      11519  ->  ~10000     (-13%)
+pos RMS     765  ->     112     (-85%)
+```
+
+At iteration 50 the whitened residual RMS is already 0.76 sigma — the
+measurements are essentially satisfied while the trajectory is 765 m wrong.
+This explains why Gauss-Newton crawls, why cost-based termination is a poor
+proxy, why results differ slightly between machines (BLAS/SuperLU rounding),
+and why sharpening 10" -> 2" helps: it steepens the valley.
+
+### 4.4 The impulse model is still mis-specified
+
+Unchanged from the previous revision and still the floor on accuracy. The truth
+propagator applies an **instantaneous** delta-v at t*; the FGO models it as a
+Gaussian of width epsilon = 30 s **centred** on t*, so half the impulse is
+applied before the manoeuvre occurs.
 
 ```
 total dynamics cost at truth = 4.4566e+06
-  within +/-3 steps of t*    = 4.4566e+06  (100.00%)
-  everywhere else            = 9.7e-03
-
+  within +/-3 steps of t*    = 100.00%
 per-step position mismatch:
-  median (smooth flight)     = 1.35e-04 m   <- Q is correctly calibrated here
+  median (smooth flight)     = 1.35e-04 m
   at t*                      = 36.67 m
   step before t*             = 8.96 m
 ```
 
-`q_pos_ric[0] = 5.222e-04` is used as a variance, so sigma ~ 0.0229 m. The 36.67 m
-mismatch is therefore a **~1600 sigma** violation of the process noise model at
-that one step.
+**Not an integration error.** Sub-stepping converges almost immediately
+(36.6695 m at `n_timesteps=1` -> 36.1250 m at 1000); only 0.54 m of 36.67 m
+(1.5%) was integration error.
 
-**This is NOT an integration error.** Sub-stepping the propagation converges
-almost immediately:
-
-```
-n_timesteps   prop_dt (s)   err at t* step (m)
-          1         60.00              36.6695
-          5         12.00              36.1254
-       1000          0.06              36.1250   <- converged
-```
-
-Only 0.54 m of 36.67 m (1.5%) was integration error. The remaining 98.5% is
-model mismatch: a symmetric pulse centred on a step boundary always puts half
-its impulse on the wrong side, regardless of how finely it is integrated or how
-narrow it is made.
-
-(An earlier note in TODO.md described this as an under-integration problem
-fixable by `use_substep`. That was wrong — sub-stepping buys half a metre.)
-
-### Why it only bites at low noise
-
-Sharpening the measurements 5x makes `S_R_inv` 5x larger, so measurement rows
-gain weight against dynamics rows — the only route through which delta-v and t*
-enter the problem:
+**New finding: t\* sits exactly on the dt grid.** `t_star_true = 12960.0 s`
+= 216 x 60 exactly, because `mc_fgo.propagate_truth` takes it as the last epoch
+of the pre-manoeuvre propagation. A symmetric pulse centred on a grid node puts
+half its impulse a full step early:
 
 ```
-||L_dyn||_F / ||L_meas||_F :  4.670e+06 at 10"   ->   9.339e+05 at 2"
+0.5 * |dv| * dt = 0.5 * 0.866025 * 60 = 25.981 m
 ```
 
-At 10 arcsec the dynamics term dominates, so the optimiser simply satisfies the
-dynamics and treats the measurements as a weak nudge. At 2 arcsec the
-measurements carry 25x more weight in the cost and there is genuine tension
-between what they say and what the mis-specified dynamics insist on.
+which is precisely the "narrowing alone plateaus at ~26 m" result. **The
+plateau is a grid-boundary artefact, not a fundamental limit of narrow pulses.**
 
-Cost at the converged solution, 2 arcsec:
+The fix still requires narrow AND causal together. With the pulse centred at
+`t* + delay`, the residual error is just the timing delay, `|dv| * delay`,
+confirmed to ~5% across the measured range:
 
-| seed | outcome | cost dyn | cost meas | total |
-|---|---|---|---|---|
-| 1 | FAIL | 1.54e+03 | 9953 | 1.15e+04 |
-| 4 | FAIL | 3.65e+04 | 9824 | 4.63e+04 |
-| 3 | improve | 10.6 | 9790 | 9.80e+03 |
-| 5 | improve | 7.9 | 9922 | 9.93e+03 |
-
-Failing seeds abandon dynamic consistency (100-3600x higher dynamics cost) for
-negligible measurement gain.
-
-### Two effects are stacked
-
-1. **Displaced objective.** Truth carries a 4.46e6 dynamics penalty, so the
-   cost function's minimum is not at truth.
-2. **Convergence failure.** Seed 4 converged to a solution 4.7x worse *in its
-   own objective* than seed 3, on a comparable problem. That is a solver
-   failure on top of the displaced objective.
-
-Fixing the impulse model addresses (1) only. (2) is untested — the LM changes
-and the lambda shrink rate (currently /2 while growth is *10) are the obvious
-suspects and have not been investigated.
+| epsilon | delay | measured | 0.866 x delay |
+|---|---|---|---|
+| 10 | 30 | 26.05 m | 25.98 |
+| 5 | 15 | 13.06 m | 12.99 |
+| 3 | 9 | 7.87 m | 7.79 |
+| 1 | 3 | 2.67 m | 2.60 |
+| 0.5 | 1.5 | 1.37 m | 1.30 |
 
 ---
 
-## 3. What fixes the model mismatch
+## 5. Option A — analytic impulse integration (still the plan)
 
-The fix requires **narrow AND causal** together. Neither alone works:
+Integrate the impulse in closed form instead of letting RK4 sample it. The
+continuous-time model is unchanged; only the integration scheme changes.
 
-- narrowing alone plateaus at ~26 m (symmetric pulse always splits at the boundary)
-- shifting alone makes it worse (a wide pulse at the wrong time)
-
-Measured, with pulse centred at `t* + 3*epsilon`:
-
-| epsilon | delay | peak step err | dyn cost @truth | post-man offset |
-|---|---|---|---|---|
-| **current (30, no shift)** | — | **36.67 m** | **4.46e+06** | 9.90 m |
-| 10 | 30 s | 26.05 m | 2.09e+06 | 25.96 m |
-| 5 | 15 s | 13.06 m | 5.27e+05 | 12.94 m |
-| 3 | 9 s | 7.87 m | 1.91e+05 | 7.74 m |
-| 1 | 3 s | 2.67 m | 2.20e+04 | 2.54 m |
-| 0.5 | 1.5 s | 1.37 m | 5.79e+03 | 1.25 m |
-
-The residual error is then just the timing delay: peak error ~= |delta-v| * delay.
-It scales linearly with epsilon and goes to zero.
-
-**The catch:** resolving a narrow pulse numerically needs `prop_dt <~ epsilon/5`,
-i.e. `n_timesteps ~ 300/epsilon`. At epsilon = 1 s that is 300x the propagation
-cost — `create_L` goes from 0.71 s to ~150 s, i.e. 25-125 min per solve.
-Prohibitive.
-
----
-
-## 4. Proposed solutions
-
-### Option A — analytic impulse integration (recommended)
-
-Split the dynamics: RK4 the gravity as now, apply the impulse in closed form.
-The Gaussian's contribution over a step is exactly integrable, so epsilon can be
-made arbitrarily small at **zero** extra cost.
-
-Over `[t0, t1]`, with `z = (t - t*)/epsilon`, `Phi` the normal CDF, `phi` the PDF:
+Over `[t0, t1]`, with `z = (t - t_c)/epsilon`, `t_c = t* + delay`:
 
 ```
 dv_applied = dv * [Phi(z1) - Phi(z0)]
 
-dr_applied = dv * { epsilon*[(z1*Phi(z1) + phi(z1)) - (z0*Phi(z0) + phi(z0))]
-                    - (t1 - t0)*Phi(z0) }
+dr_applied = dv * epsilon * [z1*Phi(z1) + phi(z1) - z1*Phi(z0) - phi(z0)]
 ```
 
-Both formulas verified against brute-force quadrature to 1e-14.
+Verified against quadrature to 1e-14 and derived independently. The Jacobians
+are then closed-form and **exact for the discrete map** (under splitting,
+`x1 = RK4_grav(x0) + Delta(p)`, so `dx1/dp = dDelta/dp` with no chain rule
+through the integrator):
 
-Code changes (three touches in `Orbit_FGO.py`):
+```
+d(dv_applied)/d(dv) = [Phi(z1) - Phi(z0)] * I3
+d(dv_applied)/dt*   = -(dv/epsilon) * [phi(z1) - phi(z0)]
+d(dr_applied)/dt*   =  dv * { ((t1-t0)/epsilon)*phi(z0) - [Phi(z1) - Phi(z0)] }
+```
 
-1. `orbital_dynamics` — drop the impulse term, leave gravity only.
-2. New `_impulse_increment(t0, t1)` returning `(dr, dv)` from the formulas above,
-   using `t_star + impulse_delay` for the causal offset.
-3. `prop_one_timestep` — RK4 the gravity, then add `dr` to position and `dv` to
-   velocity.
+### Why RK4 cannot resolve a narrow pulse
 
-`n_timesteps` stays 1, `create_L` stays at ~0.7 s, and all the sub-stepping
-machinery becomes unnecessary.
+With `n_timesteps = 1`, RK4 evaluates the dynamics at only **three distinct
+times** (`t`, `t + dt/2`, `t + dt`); k2 and k3 share a time, and the impulse
+depends on time only. Their weights add, so the applied impulse is
 
-**Caveats to handle:**
+```
+dv_applied = (dt/6) * [g(t0) + 4*g(tm) + g(t1)] * dv
+```
 
-- **Operator splitting** neglects the coupling between the impulse-induced
-  position change and the gravity felt within the step. Estimated ~1 mm against
-  Q's 2.3 cm sigma. Measure it against a heavily sub-stepped reference rather
-  than assuming.
-- **`FD_TSTAR_STEP = 0.01 s`** was sized as 0.033% of epsilon = 30 s. At
-  epsilon = 0.1 s it becomes 10% of the pulse width, far too coarse for the t*
-  Jacobian. Tie it to epsilon instead of leaving it fixed.
-- **The causal offset is a known bias.** With the pulse centred at
-  `t* + 3*epsilon`, the estimated t* is offset from the physical burn time by
-  `3*epsilon`. At epsilon = 0.1 s that is 0.3 s — negligible but it must be
-  documented or subtracted, or reported t* errors carry a constant offset.
+— exactly **Simpson's rule**. At epsilon = 30, dt = 60 that is adequate (the
+measured 0.54 m). At epsilon = 1 the three nodes are 30 s apart on a 6 s pulse,
+so the result is unrelated to the true integral. This is also why the `t*`
+Jacobian is currently a finite difference *of a quadrature* rather than of the
+true increment.
 
-### Option B — sub-step only near t*
+### Cost
 
-This is the existing `use_substep`, previously rejected on the grounds that it
-requires detecting the manoeuvre in order to integrate it.
+`F_man_mat` is **26.1% of `create_L`** (0.235 s of 0.899 s), i.e. 9.6-18.9% of a
+full iteration depending on backtracking. Real, but a constant factor — it does
+not change iteration counts.
 
-Worth revisiting: in FGO-G, `t*` is an **explicitly estimated parameter**. The
-model already asserts where the burn is; refining the integration around your own
-model's stated burn time is not detection, it is integrating the model you have
-committed to. FGO-B needs none of this since it has no impulse to integrate.
+### Caveats to handle
 
-Cheaper to implement than A, but leaves the sub-stepping machinery in place and
-keeps a runtime cost near t*.
+- **Operator splitting** neglects impulse/gravity coupling within a step.
+  Estimated ~1 mm against Q's sigma. **Measure it** against a heavily
+  sub-stepped reference; do not assume. Fallback is Strang splitting, which
+  costs the exact-Jacobian property.
+- **`FD_TSTAR_STEP = 0.01`** disappears entirely under analytic Jacobians.
+- **The causal offset is a known bias**: estimated t* is offset from the
+  physical burn time by `delay`. Document or subtract it.
 
-### Option C — moderate epsilon reduction only
-
-epsilon = 5 s with `n_timesteps = 60`: mismatch 2.8x better, dynamics cost 8.5x
-better, for ~30x runtime. Poor exchange rate. Listed for completeness.
-
-### Rejected
-
-- **Inflate Q near t***: statistically standard, but circular in the same way
-  Option B was objected to, and rejected as a hack.
-- **Generate truth with the same Gaussian**: removes the mismatch by
-  construction, but a 30 s smeared burn defeats the point of demonstrating
-  robustness against an impulsive manoeuvre.
+Keep `orbital_dynamics` computing the full field behind an `include_man` flag —
+it is required as the reference for the splitting-error measurement, and it
+keeps `a_total = a_2body + a_J2 + a_man` intact in the source and the
+manuscript.
 
 ---
 
-## 5. Open questions for next session
+## 6. Hypotheses tested and rejected
 
-1. **Does fixing the model fix the instability?** Option A makes truth far more
-   plausible under the cost (dynamics cost at truth 4.46e6 -> ~2e4), but the
-   convergence failure identified in section 2 is a separate effect. Re-run the
-   10 seeds at 2 arcsec after implementing.
-2. **What happens at 1 arcsec?** Untested. The historical ~80 m target is at
-   1 arcsec, and the trend from 10 -> 2 suggests it is reachable. But the
-   weighting shift becomes 5x more severe again, so the instability may worsen.
-   Measure before deciding how much of Option A to build.
-3. **Is the LM lambda shrink rate implicated?** Currently /2 on an accepted step
-   while growth is *10. Symmetric *10 / /10 is the standard LM form and was
-   decisive on short-arc angles-only (13,008 m at /2 vs 1,892 m at /10), but was
-   not adopted because short-arc is the config built to favour BLS. This is the
-   leading candidate for the convergence half of the problem. See TODO.md.
-4. **Alternatives raised with supervisor** (not yet investigated): triangulating
-   ground-station angles into a position region and feeding that as the
-   measurement, or moving to spacecraft-to-spacecraft angles.
+Recorded so they are not retried.
+
+| hypothesis | result |
+|---|---|
+| The prior causes the 2" failures | No. Failures occur with and without it; the prior cuts mean error 3.1x and the worst case ~5x. |
+| Failure correlates with initial-guess quality | No. corr = -0.110 (dv), -0.161 (t*), -0.052 (pos RMS at 10"). |
+| Sub-stepping fixes the manoeuvre-step error | No. 0.54 m of 36.67 m. |
+| It's a local minimum / second basin | No. All seeds reach the same basin given budget. |
+| lambda grows and freezes t* | No. lambda never grows at all. |
+| `lambda*diag(M)` damping helps | **Much worse**: 2669 / 11315 / 2211 m vs 765 / 1031 / 512 m baseline. |
+| Reactive lambda (grow on backtracking) | **Much worse** — but confounded with diag damping and the broken stall counter. Untested standalone. |
+| Textbook Nielsen LM, no line search | **Much worse**: 5613 / 35636 / 5891 m. Same confounds. |
+| Fixed lambda with diag damping | **Much worse** at every value 1e-6..1.0. Runs at lambda >= 1e-2 died at exactly iteration 10 on the stall counter, so those rows are uninformative. |
+| Normal equations lose all precision | No. `||(M+lam*I)dx - L'y|| / ||L'y|| = 9.2e-13`; spsolve is accurate. But LSMR needs >20,000 iterations without converging, implying cond(L) ~ 5e4, cond(M) ~ 3e9 — badly conditioned, not catastrophically. |
 
 ---
 
-## 6. Validation tooling
+## 7. Open questions
 
-A `check_jacobian` debugging tool was written this session (scratchpad only, not
-in the repo). It verifies `create_L` against a finite difference of `create_y`,
-exploiting `y(x + d) ~= y(x) - L*d`, so `dy/dx_j` must equal `-L[:, j]`.
+1. **Can the solver be made to converge within 50 iterations?** This is the
+   binding operational constraint. Target: eliminate divergences at
+   `max_iters = 50`, with accuracy on converged seeds matching the post-Q
+   figures (10" 160 m, 2" 55.5 m).
+2. **Why does seed 8 diverge post-Q even at 300 iterations?** New failure mode,
+   not a slow-convergence case.
+3. **What happens at 1 arcsec?** Untested. Historical target ~80 m; the post-Q
+   2" result of 55.5 m already beats it.
+4. **Does Option A change the floor?** Only measurable once the solver
+   converges reliably, or model improvement and convergence luck are confounded.
+5. **Should the Q magnitude be revisited?** The units are now right; whether 5x
+   RMS is the right margin is a separate, deliberate question.
+6. **Alternatives raised with supervisor** (not investigated): triangulating
+   ground-station angles into a position region as the measurement, or
+   spacecraft-to-spacecraft angles.
 
-Baseline results on the current code (both with and without the prior):
+---
+
+## 8. Tooling
+
+A parallel sweep harness lives in the session scratchpad and should be promoted
+into the repo (see TODO.md). It runs 10 seeds x {10", 2"} x {50, 300 iterations}
+across 10 cores in ~8 minutes by calling the real `Orbit_FGO.opt()`, and was
+validated to reproduce the serial baseline exactly. Every result in this
+document came from it.
+
+`check_jacobian` (verifies `create_L` against a finite difference of
+`create_y`, exploiting `y(x + d) ~= y(x) - L*d`) was written in scratchpad and
+**should be added to the repo permanently** — it is essential before Option A
+changes how the impulse enters both functions. Baseline on current code:
 
 ```
 short arc, 1300 cols exhaustive : max rel discrepancy 1.07e-08
 one_rev,   9946 cols exhaustive : max rel discrepancy 1.09e-08,  0 cols > 1e-3
 ```
-
-Option A changes how the impulse enters both `create_y` and `create_L`, so this
-check is essential after implementing it. The reference implementation the FGO
-was ported from had an equivalent (`reference_fgo_.py:315 test_Jacobian`) which
-was lost in the port — worth re-adding to the repo permanently.
