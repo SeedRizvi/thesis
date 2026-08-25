@@ -23,6 +23,15 @@ FD_DV_STEP = 1e-4
 # 0.01 s = 0.033% of epsilon=30s.
 FD_TSTAR_STEP = 0.01
 
+# --- opt() termination -------------------------------------------------------
+# rel_pred is the linear model's predicted cost reduction as a fraction of the
+# current cost: 1e-3..1e-1 while progressing, ~1e-11 once converged.
+CONV_REL_PRED = 1e-8
+# Stagnation backstop: stop if the cost has improved by less than
+# STALL_REL_TOL over the last STALL_WINDOW iterations combined.
+STALL_WINDOW = 10
+STALL_REL_TOL = 1e-8
+
 
 def fd_state_step(state_component: float) -> float:
     """Forward-difference step scaled to a state component's magnitude.
@@ -180,10 +189,13 @@ class SatelliteOrbitFGO:
 
         Rotates the RIC position and velocity process noise into ECI
         using the orbital state, then creates the full 6x6 Q matrix.
+
+        q_pos_ric / q_vel_ric are per-axis STANDARD DEVIATIONS (m, m/s)
+        from the config.
         """
         T = eci_to_ric_rotation_matrix(state)
-        Q_pos_eci = T.T @ np.diag(self.q_pos_ric) @ T
-        Q_vel_eci = T.T @ np.diag(self.q_vel_ric) @ T
+        Q_pos_eci = T.T @ np.diag(self.q_pos_ric ** 2) @ T
+        Q_vel_eci = T.T @ np.diag(self.q_vel_ric ** 2) @ T
         Q = np.zeros((6, 6))
         Q[:3, :3] = Q_pos_eci
         Q[3:, 3:] = Q_vel_eci
@@ -573,16 +585,25 @@ class SatelliteOrbitFGO:
         that minimises y, and move in that direction. Repeat until convergence.
         (Levenberg-Marquardt damped Gauss-Newton with backtracking line search.)
 
+        TODO: Update this comment as the implementation changes.
+        
         Backtracking line search: the dynamics are nonlinear, so trying
         scales 1, 1/2, 1/4, ... exploits the fact that smaller steps sit
         closer to the linearisation point, where the quadratic model is more
-        accurate. The first scale whose actual cost reduction covers >= 25%
-        of the predicted reduction is accepted.
+        accurate. The search stops at the first scale whose actual cost
+        reduction covers >= 25% of the predicted reduction, but the scale
+        actually taken is the lowest-cost one found, which may be a larger
+        scale tried earlier.
+
+        Termination: CONV_REL_PRED on the model's predicted relative cost
+        reduction is the convergence test, with a windowed stagnation backstop
+        (STALL_WINDOW / STALL_REL_TOL) and the max_iters / lambda ceilings.
+        Both tests are ratios of costs, hence invariant to the whitening scales.
         '''
         finished = False
         num_iters = 0
         lambda_reg = 1e-6
-        stalled = 0
+        cost_history = []
         
         while not finished:
             L = self.create_L()
@@ -627,7 +648,6 @@ class SatelliteOrbitFGO:
                         ratio = 0
                     
                     if ratio > 0.25 and next_cost < current_cost:
-                        best_scale = scale
                         break
                     
                 except Exception as e:
@@ -637,10 +657,15 @@ class SatelliteOrbitFGO:
                 if scale < 1e-10:
                     break
             
+            rel_pred_red = None
             if best_scale > 0:
                 self.update_state(delta_x * best_scale)
                 
                 lambda_reg = max(lambda_reg * 0.5, 1e-10)
+                
+                pred_y = y - L @ (delta_x * best_scale)
+                rel_pred_red = ((current_cost - float(pred_y.T @ pred_y))
+                                / current_cost)
                 
                 if verbose:
                     print(f'  delta norm: {la.norm(delta_x * best_scale):.2e}, scale: {best_scale:.3f}')
@@ -651,15 +676,21 @@ class SatelliteOrbitFGO:
             
             num_iters += 1
             
-            if (current_cost - best_cost) / current_cost < 1e-6:
-                stalled += 1
-            else:
-                stalled = 0
+            cost_history.append(best_cost)
+            if len(cost_history) > STALL_WINDOW + 1:
+                cost_history.pop(0)
             
-            if best_scale > 0 and la.norm(delta_x * best_scale) < 1e-3:
+            # The linear model has nothing left to promise.
+            if rel_pred_red is not None and rel_pred_red < CONV_REL_PRED:
                 finished = True
             
-            if num_iters >= max_iters or lambda_reg > 1e10 or stalled >= 10:
+            # Or it keeps promising and never delivers.
+            if len(cost_history) == STALL_WINDOW + 1 and cost_history[0] > 0:
+                window_red = (cost_history[0] - best_cost) / cost_history[0]
+                if window_red < STALL_REL_TOL:
+                    finished = True
+            
+            if num_iters >= max_iters or lambda_reg > 1e10:
                 finished = True
         
         if verbose:

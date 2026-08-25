@@ -115,7 +115,7 @@ def print_report(pos_err, vel_err, N):
 
     # Suggested Q values
     print("\n" + "=" * 100)
-    print("Suggested Q values (5x RMS):")
+    print("Suggested Q values (5x RMS) -- these are STANDARD DEVIATIONS;")
     print("=" * 100)
     q_pos_vals = []
     q_vel_vals = []
