@@ -4,6 +4,10 @@ Status as of 2026-08-25. All numbers below are measured on
 `configs/config_geo_one_rev_deltaRIC0.5.yml`, angles-only, FGO-G, with prior,
 10 seeds, unless stated otherwise.
 
+**Every number in this document can be reproduced from
+`analysis/angles_only_2026-08-25/`**, which holds the scripts that produced them
+and the raw per-iteration results. See section 8.
+
 **This revision supersedes the 2026-08-24 version.** Its central claim — that
 2 arcsec causes a catastrophic instability in 4 of 10 seeds — was wrong. The
 failures were an iteration-budget artefact. See section 2.
@@ -333,18 +337,40 @@ Recorded so they are not retried.
 
 ---
 
-## 8. Tooling
+## 8. Tooling and reproducing these results
 
-A parallel sweep harness lives in the session scratchpad and should be promoted
-into the repo (see TODO.md). It runs 10 seeds x {10", 2"} x {50, 300 iterations}
-across 10 cores in ~8 minutes by calling the real `Orbit_FGO.opt()`, and was
-validated to reproduce the serial baseline exactly. Every result in this
-document came from it.
+Everything is in **`analysis/angles_only_2026-08-25/`** (see its README for a
+file-by-file description). The three that matter:
+
+- `sweep_real.py` — the main harness. 10 seeds x {10", 2"} x {50, 300
+  iterations} across 10 cores in ~8 minutes, calling the **real**
+  `Orbit_FGO.opt()` so that repo changes are actually exercised. Validated to
+  reproduce the serial baseline exactly.
+
+      python analysis/angles_only_2026-08-25/sweep_real.py --tag mytest \
+             --maxits 50 300 --workers 10
+
+- `tier0_diag.py` — supplies `build_seed`, which `sweep_real.py` imports. It
+  replicates `mc_fgo.run_fgo_seed`'s RNG draw order exactly, which is what makes
+  these seed numbers comparable with the Monte Carlo drivers.
+- `truth_cache.py` — loads truth from `out/*.csv` rather than re-propagating,
+  and sidesteps the fixed `/tmp` path that makes `mc_fgo.propagate_truth` race
+  under parallel use.
+
+Raw results: `sweep300.json` is the pre-fix baseline; `real_step1/2/3.json` are
+the regressions after the line-search, termination and Q-units fixes
+respectively. The JSON files carry per-iteration curves, the `.log` files the
+readable summaries.
+
+Caveat recorded in the README: `seed_sweep.py`, `seed_sweep_rounded.py` and
+`sweep300.py` **reimplement** `opt()` instead of calling it. They are superseded
+by `sweep_real.py` and will not reflect solver changes made after 2026-08-25.
 
 `check_jacobian` (verifies `create_L` against a finite difference of
-`create_y`, exploiting `y(x + d) ~= y(x) - L*d`) was written in scratchpad and
-**should be added to the repo permanently** — it is essential before Option A
-changes how the impulse enters both functions. Baseline on current code:
+`create_y`, exploiting `y(x + d) ~= y(x) - L*d`) was **not** carried over and
+should be added to the repo permanently (see TODO.md) — it is essential before
+Option A changes how the impulse enters both functions. Baseline on current
+code:
 
 ```
 short arc, 1300 cols exhaustive : max rel discrepancy 1.07e-08
