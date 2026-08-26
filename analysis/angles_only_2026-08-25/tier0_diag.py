@@ -169,8 +169,13 @@ class InstrumentedFGO(SatelliteOrbitFGO):
 
 # ---------------------------------------------------------------------------
 def build_seed(seed, truth_states, times, dt, ground_stations, params,
-               delta_v_eci, manoeuvre_state, t_star_true, cls):
-    """Replicates mc_fgo.run_fgo_seed's setup exactly (same RNG draw order)."""
+               delta_v_eci, manoeuvre_state, t_star_true, cls, mode='FGO-G'):
+    """Replicates mc_fgo.run_fgo_seed's setup exactly (same RNG draw order).
+
+    mode='FGO-B' skips the delta-v / t* draws, exactly as mc_fgo does, so the
+    RNG stream stays aligned: FGO-B and FGO-G for the same seed therefore share
+    identical measurements and identical x0, and are directly comparable.
+    """
     np.random.seed(seed)
 
     measurements, R = simulate_measurements(
@@ -186,14 +191,31 @@ def build_seed(seed, truth_states, times, dt, ground_stations, params,
     x0_err[3:] = np.random.normal(0, params['initial_vel_error'], 3)
     x0 += x0_err
 
-    dv_noise = np.random.normal(0, params['dv_initial_error'], 3)
-    dv_guess = delta_v_eci + dv_noise
-    t_star_guess_err = np.random.normal(0, params['t_star_initial_error'])
-    t_star_guess = t_star_true + t_star_guess_err
-    manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
+    if mode == 'FGO-G' and delta_v_eci is not None:
+        dv_noise = np.random.normal(0, params['dv_initial_error'], 3)
+        dv_guess = delta_v_eci + dv_noise
+        t_star_guess_err = np.random.normal(0, params['t_star_initial_error'])
+        t_star_guess = t_star_true + t_star_guess_err
+        manoeuvres = [{'delta_v': dv_guess, 't_star': t_star_guess}]
+    else:
+        manoeuvres = None
+        t_star_guess_err = None
 
-    P0 = build_P0(1, params['initial_pos_error'], params['initial_vel_error'],
-                  params['dv_initial_error'], params['t_star_initial_error'])
+    n_man = 0 if manoeuvres is None else len(manoeuvres)
+    # p0_scale multiplies the PRIOR sigmas only, leaving the sampled error
+    # untouched. p0_scale == 1 is the correct, self-consistent case: the prior
+    # covariance equals the distribution the perturbation was drawn from.
+    # Anything else deliberately mis-specifies the prior, which is the point of
+    # the robustness arm of the study. A very large value (1e6) effectively
+    # removes the prior, since S_P0_inv -> 0.
+    ps = params.get('p0_scale', 1.0)
+    P0 = build_P0(n_man,
+                  params['initial_pos_error'] * ps,
+                  params['initial_vel_error'] * ps,
+                  None if params.get('dv_initial_error') is None
+                  else params['dv_initial_error'] * ps,
+                  None if params.get('t_star_initial_error') is None
+                  else params['t_star_initial_error'] * ps)
 
     fgo = cls(measurements, R, params['q_pos_ric'], params['q_vel_ric'],
               ground_stations, dt, x0=x0, P0=P0,

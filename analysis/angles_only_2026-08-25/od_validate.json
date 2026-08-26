@@ -1,0 +1,25 @@
+[
+  {
+    "config": "RIC0.5",
+    "mode": "FGO-G",
+    "noise": 2.0,
+    "seed": 3,
+    "damping": true,
+    "pos_rms": 69.18428054360834,
+    "vel_rms": 0.030328562578246922,
+    "pos_rms_pre": 176.6632326430151,
+    "pos_rms_post": 28.365473801617306,
+    "pos_rms_init": 172351.9058145289,
+    "pos_rms_at50": 69.18428054360834,
+    "iters_at50_capped": 24,
+    "cost_dyn": 0.39052084542759913,
+    "cost_meas": 9832.787737157716,
+    "cost_prior": 12.290730686237014,
+    "n_iters": 24,
+    "termination": "converged",
+    "runtime": 36.674589759999435,
+    "improved": true,
+    "dv_err": 0.024047493831217886,
+    "tstar_err": -95.15366242755954
+  }
+]

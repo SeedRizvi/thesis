@@ -11,7 +11,7 @@
   freeze t* first -- curvature-scaled damping must land WITH the lambda-update
   fix, not after it. Three variants have already been measured and rejected
   (diag damping, reactive lambda, textbook Nielsen) but all were confounded with
-  the then-broken stall counter; see ANGLES_ONLY_FGO.md 6 before retrying.
+  the then-broken stall counter; see ANGLES_ONLY_FGO.md 7 before retrying.
   Target: no divergences at max_iters = 50.
 - Promote the parallel sweep harness from scratchpad into the repo. Runs
   10 seeds x {10", 2"} x {50, 300 iters} in ~8 min on 10 cores by calling the
@@ -22,7 +22,7 @@
   finite difference of create_y. Essential before Option A, which changes how
   the impulse enters both. The reference implementation this was ported from
   had an equivalent (reference_fgo_.py:315 test_Jacobian) that was lost.
-- Implement Option A (analytic impulse integration) -- see ANGLES_ONLY_FGO.md 5
+- Implement Option A (analytic impulse integration) -- see ANGLES_ONLY_FGO.md 6
   for the formulas, Jacobians, cost measurement and caveats. Deferred until the
   solver converges reliably, otherwise the model improvement cannot be separated
   from convergence luck.

@@ -1,0 +1,38 @@
+[
+  {
+    "noise": 2.0,
+    "seed": 3,
+    "variant": "A_current",
+    "lam0": 1e-06,
+    "maxit": 50,
+    "pos_rms": 69.18428054360834,
+    "cost_dyn": 0.39052084542759913,
+    "tstar_err": -95.15366242755954,
+    "dv_err": 0.024047493831217886,
+    "n_iters": 24,
+    "termination": "converged",
+    "runtime": 36.165316128,
+    "lam_max": 1e-06,
+    "lam_final": 1e-10,
+    "median_scale": 1.0,
+    "n_rejected": 0
+  },
+  {
+    "noise": 2.0,
+    "seed": 8,
+    "variant": "A_current",
+    "lam0": 1e-06,
+    "maxit": 50,
+    "pos_rms": 10651.099911078372,
+    "cost_dyn": 825213.8030698908,
+    "tstar_err": -207.1631183306872,
+    "dv_err": 0.11087759979254391,
+    "n_iters": 50,
+    "termination": "max_iters",
+    "runtime": 148.21838128,
+    "lam_max": 1e-06,
+    "lam_final": 1e-10,
+    "median_scale": 0.0009765625,
+    "n_rejected": 0
+  }
+]
