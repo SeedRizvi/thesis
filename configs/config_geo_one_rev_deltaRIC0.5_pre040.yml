@@ -1,0 +1,96 @@
+# Configuration file for GEO satellite orbit propagation
+# VARIANT: 40% pre-manoeuvre / 60% post-manoeuvre arc.
+# Total arc held at 1.15 days (0.46 + 0.69) so N and the dt grid match the baseline.
+# Factor Graph Optimisation testing
+
+scenario_parameters:
+  time_step: 60  # dt (seconds)
+  MJD_start: 59349.00
+  MJD_end: 59349.46  # ~3.6 hours of data  
+  max_time_step: 60
+  output_directory: out/
+
+initial_orbtial_parameters:
+  dim_state: 6
+  # GEO satellite over Australia/Southeast Asia
+  initial_state: [
+    40812387.0,     # x (m)
+    10590400.0,     # y (m)
+    -83444.0,       # z (m) - near-equatorial
+    -772.3,         # vx (m/s)
+    2976.1,         # vy (m/s)
+    0.0             # vz (m/s)
+  ]
+  initial_state_type: ECI
+
+propagator_truth_settings:
+  # orbDetHOUSE propagation settings
+  earth_gravity_model_order: 2  # Only up to J2
+  earth_gravity_model_degree: 2 # Only up to J2
+  third_body_attraction: false
+  third_body_sun: false
+  third_body_moon: false
+  solid_earth_tide: false  # Disabled for simplicity
+  ocean_tide_loading: false  # Disabled for simplicity
+  solar_radiation_pressure: false # Disabled for simplicity
+  atmospheric_drag: false  # Negligible at GEO
+  relativity_effect: false  # Disabled for simplicity
+  srpCoef: 1.0
+  srpArea: 10.0
+  dragCoef: 2.0
+  dragArea: 5.0
+  satMass: 1000.0
+
+supporting_files:
+  gravity_file: ./auxdata/GGM03S.txt
+  ephemeris_file: ./auxdata/linux_p1550p2650.440
+  ERP_file: ./auxdata/cod21587.erp
+
+# Ground station network for measurements
+ground_stations:
+  - name: "Rocky Point"
+    latitude: -12.6192729   # degrees
+    longitude: 141.8750835  # degrees
+    altitude: 0        # metres
+  
+  - name: "Singapore"
+    latitude: 1.3521
+    longitude: 103.8198
+    altitude: 0.0
+
+  - name: "Tsukuba"
+    latitude: 36.0675 
+    longitude: 140.1313
+    altitude: 0.0
+    
+# FGO-specific parameters
+fgo_parameters:
+
+  # Measurement configuration
+  use_range: true  # Enable range measurements for better accuracy
+  measurement_noise_deg: 0.00278  # Angular measurement noise (deg) - Currently 10 arcseconds
+  range_noise_m: 10.0  # Range measurement noise in metres
+  
+  # Process noise (dynamics uncertainty, Q Matrix)
+  # Following values configured for dt=60s (see noise_variables_results.md)
+  # Qpos: per-axis STANDARD DEVIATION (5x dynamics error RMS per RIC axis).
+  process_noise_position: [5.222393e-04, 3.661425e-04, 2.168107e-04] # Position process noise [R, I, C] (m)
+  # Qvel: per-axis STANDARD DEVIATION (5x dynamics error RMS per RIC axis).
+  process_noise_velocity: [1.741698e-05, 1.209809e-05, 7.227003e-06] # Velocity process noise [R, I, C] (m/s)
+
+  # Initial state errors
+  initial_position_error: 1000.0  # Initial position error std dev (m)
+  initial_velocity_error: 1.0     # Initial velocity error std dev (m/s)
+  
+  # Optimisation settings
+  max_iterations: 50
+  convergence_threshold: 0.001
+
+manoeuvre_parameters:
+  # Manoeuvre Delta-V in RIC frame: [Radial, In-track, Cross-track] (m/s)
+  delta_v_ric: [0.5, 0.5, 0.5]
+  # Post-Manoeuvre Propagation Duration
+  pm_duration: 0.69          # Duration in days
+  epsilon: 30.0              # Gaussian shaping parameter (seconds)
+  dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
+  t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)
