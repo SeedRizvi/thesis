@@ -20,7 +20,7 @@ FD_DV_STEP = 1e-4
 # Perturbation for t* in F_man_mat. Sized to the Gaussian pulse width
 # `epsilon` (config: manoeuvre_parameters/epsilon), not to t* itself.
 # The FD step must shift the pulse by a measurable fraction of its shape.
-# 0.01 s = 0.033% of epsilon=30s.
+# 0.01 s = 0.01% of epsilon=100s.
 FD_TSTAR_STEP = 0.01
 
 # --- opt() termination -------------------------------------------------------
@@ -581,12 +581,10 @@ class SatelliteOrbitFGO:
     def opt(self, max_iters=50, verbose=True):
         '''
         Build the Jacobian matrix (L) and residual vector (y) for the current
-        state, solve the regularised normal equations for the best linear step
-        that minimises y, and move in that direction. Repeat until convergence.
-        (Levenberg-Marquardt damped Gauss-Newton with backtracking line search.)
+        state, solve the normal equations for the best linear step that
+        minimises y, and move in that direction. Repeat until convergence.
+        (Gauss-Newton with a backtracking line search.)
 
-        TODO: Update this comment as the implementation changes.
-        
         Backtracking line search: the dynamics are nonlinear, so trying
         scales 1, 1/2, 1/4, ... exploits the fact that smaller steps sit
         closer to the linearisation point, where the quadratic model is more
@@ -599,6 +597,9 @@ class SatelliteOrbitFGO:
         reduction is the convergence test, with a windowed stagnation backstop
         (STALL_WINDOW / STALL_REL_TOL) and the max_iters / lambda ceilings.
         Both tests are ratios of costs, hence invariant to the whitening scales.
+
+        lambda_reg no longer damps the solve; it only counts consecutive line
+        search failures, so lambda_reg > 1e10 bails out after ~16 of them.
         '''
         finished = False
         num_iters = 0
@@ -614,15 +615,15 @@ class SatelliteOrbitFGO:
                 print(f'Iteration {num_iters}: cost = {current_cost:.2e}')
             
             M = L.T @ L
-            M_reg = M + lambda_reg * sp.eye(M.shape[0])
             Lty = L.T @ y
             
             try:
-                delta_x = spla.spsolve(M_reg, Lty)
+                delta_x = spla.spsolve(M, Lty)
             except:
                 if verbose:
-                    print(f'Solver failed, increasing regularization')
-                lambda_reg *= 10
+                    print(f'Solver failed on iteration {num_iters}')
+                # Undamped, so the retry is identical: bail rather than spin.
+                finished = True
                 continue
             
             scale = 1.0

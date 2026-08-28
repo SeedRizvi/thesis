@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.linalg as la
 from Orbit_FGO import (SatelliteOrbitFGO, eci_to_ric_rotation_matrix,
-                       fd_state_step, FD_DV_STEP, FD_TSTAR_STEP)
+                       fd_state_step, FD_DV_STEP, FD_TSTAR_STEP,
+                       CONV_REL_PRED, STALL_WINDOW, STALL_REL_TOL)
 
 
 class SatelliteOrbitBLS(SatelliteOrbitFGO):
@@ -126,9 +127,11 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
         return J, r0
 
 
-    # Solver (Levenberg-Marquardt with backtracking)
     def run(self, max_iters=50, verbose=True):
-        """Solve using Levenberg-Marquardt with backtracking line search."""
+        """Solve using Gauss-Newton with a backtracking line search.
+
+        Matches Orbit_FGO.opt().
+        """
 
         # Initial propagation from x0
         self._propagate_trajectory()
@@ -136,7 +139,7 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
         lambda_reg = 1e-6
         finished = False
         num_iters = 0
-        stalled = 0
+        cost_history = []
 
         while not finished:
             J, r = self._compute_jacobian()
@@ -151,17 +154,17 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
             D_inv = 1.0 / col_norms
             J_scaled = J * D_inv[np.newaxis, :]
 
-            # Levenberg-Marquardt normal equations: (Js^T Js + λI) δps = Js^T r
+            # Gauss-Newton normal equations: (Js^T Js) δps = Js^T r
             JtJ = J_scaled.T @ J_scaled
             Jtr = J_scaled.T @ r
-            M_reg = JtJ + lambda_reg * np.eye(self.n_solve)
 
             try:
-                delta_p_scaled = la.solve(M_reg, Jtr, assume_a='pos')
+                delta_p_scaled = la.solve(JtJ, Jtr, assume_a='pos')
             except la.LinAlgError:
                 if verbose:
-                    print(f'  Solver failed, increasing regularisation')
-                lambda_reg *= 10
+                    print(f'  Solver failed on iteration {num_iters}')
+                # Undamped, so the retry is identical: bail rather than spin.
+                finished = True
                 continue
 
             # Un-scale
@@ -197,7 +200,6 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
                         ratio = 0
 
                     if ratio > 0.25 and test_cost < current_cost:
-                        best_scale = scale
                         break
                 except Exception:
                     pass
@@ -206,6 +208,7 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
                 if scale < 1e-10:
                     break
 
+            rel_pred_red = None
             if best_scale > 0:
                 self.states[0] = x0_save - delta_p[:6] * best_scale
                 if self.n_man_params > 0:
@@ -213,6 +216,10 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
                 self._propagate_trajectory()
 
                 lambda_reg = max(lambda_reg * 0.5, 1e-10)
+
+                pred_r = r - J @ (delta_p * best_scale)
+                rel_pred_red = ((current_cost - float(pred_r @ pred_r))
+                                / current_cost)
 
                 if verbose:
                     print(f'  delta norm: {la.norm(delta_p * best_scale):.2e}, scale: {best_scale:.3f}')
@@ -228,15 +235,21 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
             num_iters += 1
 
-            if (current_cost - best_cost) / current_cost < 1e-6:
-                stalled += 1
-            else:
-                stalled = 0
+            cost_history.append(best_cost)
+            if len(cost_history) > STALL_WINDOW + 1:
+                cost_history.pop(0)
 
-            if best_scale > 0 and la.norm(delta_p * best_scale) < 1e-3:
+            # The linear model has nothing left to promise.
+            if rel_pred_red is not None and rel_pred_red < CONV_REL_PRED:
                 finished = True
 
-            if num_iters >= max_iters or lambda_reg > 1e10 or stalled >= 10:
+            # Or it keeps promising and never delivers.
+            if len(cost_history) == STALL_WINDOW + 1 and cost_history[0] > 0:
+                window_red = (cost_history[0] - best_cost) / cost_history[0]
+                if window_red < STALL_REL_TOL:
+                    finished = True
+
+            if num_iters >= max_iters or lambda_reg > 1e10:
                 finished = True
 
         if verbose:
