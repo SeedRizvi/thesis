@@ -99,7 +99,10 @@ def propagate_truth(config_path, tag):
 
         with open(config_path, 'r') as f:
             config_post = yaml.safe_load(f)
-        mjd_start_new = config_post['scenario_parameters']['MJD_end']
+        # Start the post arc where the pre arc actually ended, which is the last
+        # dt sample at or before MJD_end, not MJD_end itself.
+        mjd_start_new = (config_post['scenario_parameters']['MJD_start']
+                         + t_star_true / 86400.0)
         mjd_end_new = mjd_start_new + duration
 
         state_str = '[' + ', '.join(f'{v}' for v in new_state) + ']'
