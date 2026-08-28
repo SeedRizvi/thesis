@@ -4,7 +4,7 @@
 scenario_parameters:
   time_step: 60  # dt (seconds)
   MJD_start: 59349.00
-  MJD_end: 59349.15  # ~3.6 hours of data  
+  MJD_end: 59349.46  # ~11 hours of data (manoeuvre at 40% of the arc)
   max_time_step: 60
   output_directory: out/
 
@@ -65,8 +65,8 @@ ground_stations:
 fgo_parameters:
 
   # Measurement configuration
-  use_range: true  # Enable range measurements for better accuracy
-  measurement_noise_deg: 0.00278  # Angular measurement noise (deg) - Currently 10 arcseconds
+  use_range: false  # Angles-only (az/el)
+  measurement_noise_deg: 0.00055556  # Angular measurement noise (deg) - Currently 2 arcseconds
   range_noise_m: 10.0  # Range measurement noise in metres
   
   # Process noise (dynamics uncertainty, Q Matrix)
@@ -88,7 +88,7 @@ manoeuvre_parameters:
   # Manoeuvre Delta-V in RIC frame: [Radial, In-track, Cross-track] (m/s)
   delta_v_ric: [0.5, 0.5, 0.5]
   # Post-Manoeuvre Propagation Duration
-  pm_duration: 1.0          # Duration in days
-  epsilon: 30.0              # Gaussian shaping parameter (seconds)
+  pm_duration: 0.69         # Duration in days (total arc held at 1.15)
+  epsilon: 100.0              # Gaussian shaping parameter (seconds)
   dv_initial_error: 0.1     # Initial delta-v guess error std dev (m/s)
   t_star_initial_error: 120.0  # Initial t* guess error std dev (seconds)
