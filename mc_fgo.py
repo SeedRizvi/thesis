@@ -18,7 +18,6 @@ Usage:
 import argparse
 import os
 import time
-import re
 import numpy as np
 import pandas as pd
 import yaml
@@ -73,11 +72,14 @@ def propagate_truth(config_path, tag):
     duration = config_params['pm_duration']
     prop = OrbitPropagator("orbDetHOUSE")
 
+    # Per-process so mc_fgo/mc_bls/mc_ekf can run the same config concurrently.
+    uid = f"{tag}_{os.getpid()}"
+
     if delta_v_ric is not None:
         delta_v_ric = np.array(delta_v_ric, dtype=float)
 
         pre_csv = prop.propagate(config_path,
-                                 output_file=f"mc_fgo_truth_pre_{tag}.csv")
+                                 output_file=f"mc_fgo_truth_pre_{uid}.csv")
         df_pre = pd.read_csv(pre_csv)
 
         manoeuvre_state = df_pre[['x', 'y', 'z', 'vx', 'vy', 'vz']] \
@@ -95,9 +97,6 @@ def propagate_truth(config_path, tag):
         ]
 
         with open(config_path, 'r') as f:
-            raw = f.read()
-
-        with open(config_path, 'r') as f:
             config_post = yaml.safe_load(f)
         # Start the post arc where the pre arc actually ended, which is the last
         # dt sample at or before MJD_end, not MJD_end itself.
@@ -105,30 +104,30 @@ def propagate_truth(config_path, tag):
                          + t_star_true / 86400.0)
         mjd_end_new = mjd_start_new + duration
 
-        state_str = '[' + ', '.join(f'{v}' for v in new_state) + ']'
-        raw = re.sub(r'(initial_state:\s*)\[.*?\]', rf'\1{state_str}',
-                     raw, flags=re.DOTALL)
-        raw = re.sub(r'(MJD_start:\s*)[\d.]+', rf'\g<1>{mjd_start_new}',
-                     raw)
-        raw = re.sub(r'(MJD_end:\s*)[\d.]+', rf'\g<1>{mjd_end_new}',
-                     raw)
+        # Edit the parsed config, not the raw text: a regex on the text only
+        # matches flow-style `initial_state: [...]` and silently does nothing
+        # on block-style YAML, which propagates the post arc from the wrong state.
+        config_post['initial_orbtial_parameters']['initial_state'] = \
+            [float(v) for v in new_state]
+        config_post['scenario_parameters']['MJD_start'] = mjd_start_new
+        config_post['scenario_parameters']['MJD_end'] = mjd_end_new
 
-        tmp_cfg = f'/tmp/mc_fgo_post_{tag}.yml'
+        tmp_cfg = f'/tmp/mc_fgo_post_{uid}.yml'
         with open(tmp_cfg, 'w') as f:
-            f.write(raw)
+            yaml.safe_dump(config_post, f)
 
         post_csv = prop.propagate(tmp_cfg,
-                                  output_file=f"mc_fgo_truth_post_{tag}.csv")
+                                  output_file=f"mc_fgo_truth_post_{uid}.csv")
         os.remove(tmp_cfg)
 
         df_post = pd.read_csv(post_csv)
         df_post['tSec'] = df_post['tSec'] + df_pre['tSec'].iloc[-1]
         df_combined = pd.concat([df_pre, df_post.iloc[1:]], ignore_index=True)
-        csv_path = os.path.abspath(f"out/mc_fgo_truth_{tag}.csv")
+        csv_path = os.path.abspath(f"out/mc_fgo_truth_{uid}.csv")
         df_combined.to_csv(csv_path, index=False)
     else:
         csv_path = prop.propagate(config_path,
-                                  output_file=f"mc_fgo_truth_{tag}.csv")
+                                  output_file=f"mc_fgo_truth_{uid}.csv")
         delta_v_ric = None
         delta_v_eci = None
         manoeuvre_state = None

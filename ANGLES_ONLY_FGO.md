@@ -2,6 +2,10 @@
 
 Status as of 2026-08-27.
 
+**See also `FGO_VS_BLS.md`** for why FGO and BLS produce identical results on
+the shipped configuration, and what separates them (arc length and dynamics
+model error).
+
 **Structure.** Part I is the results, organised by the parameter each study
 varies — this is the material for the manuscript. Part II is what remains open.
 Part III is the diagnostic and debugging history: how the solver problems were

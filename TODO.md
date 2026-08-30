@@ -1,18 +1,37 @@
+- Finish the epsilon sweep section for interim_fgo_vs_bls.md. Runner is
+  scratchpad eps_suite2.py (15 seeds, -G only, baseline config: 2body+J2,
+  1.15 d, 40% epoch, 2 arcsec, dt=60). Sweep eps = 20,25,30,45,60,100,150,200,300
+  x {RIC0, RIC0.5, I0.2} x {FGO, BLS, EKF} = 1215 runs, ~30 min on 8 workers.
+  Insert as the section after "Baseline" using scratchpad mkeps.py.
+  eps <= 15 is deliberately excluded: a 120-run probe (eps_probe.json) shows
+  eps=10 caps the 300-iteration limit on 3/5 seeds in both configs and eps=15
+  on 1/5, while eps>=20 converges on every seed and eps>=45 is flat at 5
+  iterations. Position RMS is constant (26.5-29.3 m) across eps 5 to 300, so
+  epsilon costs convergence, not accuracy -- the probe result is arguably the
+  more useful finding and is worth reporting alongside the sweep.
+  NOTE: -B mode is invariant to epsilon (it enters only via the manoeuvre term),
+  so only -G needs sweeping.
+- Promote the rigid_dev diagnostic and the 2x2 harness into the repo. rigid_dev
+  is the single number that predicts whether FGO and BLS will differ (see
+  FGO_VS_BLS.md 2) and costs one extra propagation per solve. screen2x2.py
+  produced the 800-run 2x2 and is still scratchpad-only.
 - Update project structure in README. Also mention where the manuscript results are in the repo.
+- Raise max_iterations from 50 to 200-300 in the configs before the real MC.
+  Measured on the 50-seed preliminary: 8/50 short-arc FGO-G seeds hit the cap and
+  read 1827-5696 m; given budget every one converges on its own criteria in
+  65-132 iterations and lands at 112-489 m, matching BLS exactly. maxit 300 and
+  1000 give identical answers, so nothing needs more than ~132. one_rev runtime
+  tails (max/p50 of 5-8x on deltaRIC0.5 and deltaRIC1) suggest 50 is close to
+  binding there too. Costs nothing since termination is on CONV_REL_PRED.
 - Re-run the EKF and BLS Monte Carlos. The Q std-dev/variance fix changed
   Orbit_EKF.compute_Q as well as Orbit_FGO.compute_S_Q_inv, and BLS inherits
   from the FGO class, so every published EKF/BLS number has moved. Only the FGO
   angles-only sweep has been re-measured so far (see ANGLES_ONLY_FGO.md 1).
-- Make opt() a proper Levenberg-Marquardt. Measured: lambda never grows in any
-  run (lambda_max = 5e-7 over 20+ runs) because the growth branch only fires
-  when the line search fails across all 20 halvings, which never happens. It is
-  Gauss-Newton with backtracking, and the damping is vestigial. NOTE: the t*
-  column's curvature is 2.53e2 against velocity's 9.49e6, so lambda*I would
-  freeze t* first -- curvature-scaled damping must land WITH the lambda-update
-  fix, not after it. Three variants have already been measured and rejected
-  (diag damping, reactive lambda, textbook Nielsen) but all were confounded with
-  the then-broken stall counter; see ANGLES_ONLY_FGO.md 7 before retrying.
-  Target: no divergences at max_iters = 50.
+- SETTLED: do NOT make opt() a Levenberg-Marquardt. The damping was removed
+  from both Orbit_FGO and Orbit_BLS on 2026-08-28. LM damps the weakly-observed
+  directions that must move, and the prior is already the principled
+  regulariser -- see ANGLES_ONLY_FGO.md 15.2 and the 18 hypothesis table before
+  re-proposing it.
 - Promote the parallel sweep harness from scratchpad into the repo. Runs
   10 seeds x {10", 2"} x {50, 300 iters} in ~8 min on 10 cores by calling the
   real opt(); validated to reproduce the serial baseline exactly. Every number
@@ -33,6 +52,19 @@
   thought to fix the manoeuvre-step dynamics error. It does not -- see ANGLES_ONLY_FGO.md.
   The 36.7 m error is model mismatch (Gaussian vs instantaneous delta-v), not integration
   error; sub-stepping removes only 0.54 m of it.
+- SETTLED (2026-08-28), recorded so it is not re-investigated: EKF-G |dv| error
+  blows up with range at eps=30 (1.031 m/s vs a true 0.866, i.e. worse than
+  guessing zero) but is fine angles-only at eps=100 (0.057). Diagnosed: the
+  filter is statistically consistent (NIS/dof 0.99-1.03 in all cells, so the
+  covariance is NOT optimistic and the Q fix did not make it over-confident).
+  dv does not jump at the burn -- it drifts for the whole post-burn arc via the
+  cross-covariance P[0:6,6:], which carries real and mostly USEFUL information.
+  Process noise on the dv/t* block changes nothing (<4% at any level), so it is
+  not a confidence lock-in. Decommissioning dv/t* after the burn window fixes
+  the range case (-62%) but is significantly WORSE at eps=100 angles-only
+  (+365%), which is the shipped configuration. No fix applied; this is a
+  range-plus-narrow-pulse artefact, not a defect. Raw data:
+  scratchpad ekf_phase2.json / ekf_phase3.json.
 - Investigate t* estimation bias in EKF-G. Mean signed error is -20.6s (old P0) / -29.3s
   (config P0) over 8 seeds on deltaRIC0.5, with a -157s outlier. The 120s t* prior is not
   the binding constraint, so this looks separate from the P0 work.
