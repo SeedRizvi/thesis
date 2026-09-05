@@ -21,11 +21,11 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
     def __init__(self, meas, R, q_pos_ric, q_vel_ric, ground_stations,
                  dt=60.0, x0=None, P0=None, use_range=True, meas_per_station=None,
-                 manoeuvres=None, epsilon=0.5):
+                 manoeuvres=None, epsilon=0.5, gmst0=0.0):
 
         super().__init__(meas, R, q_pos_ric, q_vel_ric, ground_stations,
                          dt, x0, P0, use_range, meas_per_station, manoeuvres,
-                         epsilon)
+                         epsilon, gmst0=gmst0)
 
         # Reconstruct R covariance from parent's S_R_inv = inv(chol(R))
         L_R = la.inv(self.S_R_inv)
@@ -138,6 +138,7 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
         lambda_reg = 1e-6
         finished = False
+        converged = False
         num_iters = 0
         cost_history = []
 
@@ -241,16 +242,21 @@ class SatelliteOrbitBLS(SatelliteOrbitFGO):
 
             # The linear model has nothing left to promise.
             if rel_pred_red is not None and rel_pred_red < CONV_REL_PRED:
+                converged = True
                 finished = True
 
             # Or it keeps promising and never delivers.
             if len(cost_history) == STALL_WINDOW + 1 and cost_history[0] > 0:
                 window_red = (cost_history[0] - best_cost) / cost_history[0]
                 if window_red < STALL_REL_TOL:
+                    converged = True
                     finished = True
 
             if num_iters >= max_iters or lambda_reg > 1e10:
                 finished = True
+
+            self.num_iters = num_iters
+            self.converged = converged
 
         if verbose:
             print(f'\nBLS finished after {num_iters} iterations')

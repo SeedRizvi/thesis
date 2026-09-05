@@ -14,6 +14,16 @@ from Orbit_FGO import SatelliteOrbitFGO, ric_to_eci, eci_to_ric, eci_to_ric_rota
 from Orbit_EKF import build_P0
 
 
+def gmst_rad(mjd_ut1):
+    """Greenwich mean sidereal time (radians). Matches SOFA iauGmst06 to 0.04 arcsec."""
+    mjd0 = np.floor(mjd_ut1)
+    Tu = (mjd0 - 51544.5) / 36525.0
+    g = (24110.54841 + 8640184.812866 * Tu
+         + 0.093104 * Tu ** 2 - 6.2e-6 * Tu ** 3)
+    g += 1.00273790935 * (mjd_ut1 - mjd0) * 86400.0
+    return np.deg2rad((g % 86400.0) / 240.0) % (2 * np.pi)
+
+
 def load_propagator_output(csv_path):
     """Load orbit propagation results from CSV file"""
     df = pd.read_csv(csv_path)
@@ -27,7 +37,8 @@ def load_propagator_output(csv_path):
 def simulate_measurements(states, times, ground_stations, 
                           measurement_noise_deg=0.01,
                           use_range=True,
-                          range_noise_m=100.0):
+                          range_noise_m=100.0,
+                          gmst0=0.0):
     """
     Simulate azimuth/elevation and optionally range measurements from ground stations
     
@@ -52,8 +63,8 @@ def simulate_measurements(states, times, ground_stations,
     for i, (state, t) in enumerate(zip(states, times)):
         for lat, lon, alt in ground_stations:
             # Compute measurements
-            az, el, rng = compute_measurements_full(state[:3], (lat, lon, alt), t, 
-                                                   omega_earth, R_earth)
+            az, el, rng = compute_measurements_full(state[:3], (lat, lon, alt), t,
+                                                   omega_earth, R_earth, gmst0)
             
             # Add measurement noise
             az_meas = az + np.random.normal(0, angle_noise_rad)
@@ -79,12 +90,13 @@ def simulate_measurements(states, times, ground_stations,
     return measurements, R
 
 
-def compute_measurements_full(r_sat_eci, station_llh, t, omega_earth, R_earth):
+def compute_measurements_full(r_sat_eci, station_llh, t, omega_earth, R_earth,
+                              gmst0=0.0):
     """Compute azimuth, elevation, and range from ground station to satellite"""
     lat, lon, alt = station_llh
     
-    # Earth rotation angle
-    theta = omega_earth * t
+    # Earth rotation angle; gmst0 is GMST at the arc epoch (t = 0)
+    theta = gmst0 + omega_earth * t
     
     # Rotation matrix from ECEF to ECI
     R_ecef_to_eci = np.array([
@@ -169,6 +181,8 @@ def load_config_parameters(config_path):
     fgo_params = config['fgo_parameters']
     params = read_required(fgo_params, 'fgo_parameters', REQUIRED_FGO)
     params['max_iterations'] = fgo_params.get('max_iterations', 50)
+    params['mjd_start'] = config['scenario_parameters']['MJD_start']
+    params['gmst0'] = float(gmst_rad(params['mjd_start']))
 
     # Manoeuvre section is optional, but must be complete when present
     if 'manoeuvre_parameters' in config:
@@ -236,6 +250,7 @@ def run_fgo_with_propagator(config_path,
     initial_pos_error = config_params['initial_pos_error']
     initial_vel_error = config_params['initial_vel_error']
     duration = config_params['pm_duration']
+    gmst0 = config_params['gmst0']
 
     from propagator import OrbitPropagator
     prop = OrbitPropagator("orbDetHOUSE")
@@ -321,8 +336,9 @@ def run_fgo_with_propagator(config_path,
         if use_range:
             print(f"   Range noise: {range_noise_m} metres")
     
-    measurements, R = simulate_measurements(truth_states, times, ground_stations, 
-                                           measurement_noise_deg, use_range, range_noise_m)
+    measurements, R = simulate_measurements(truth_states, times, ground_stations,
+                                           measurement_noise_deg, use_range, range_noise_m,
+                                           gmst0=gmst0)
     
     # Step 4: Setup process noise
     q_pos_ric = np.array(process_noise_pos, dtype=float)
@@ -380,7 +396,7 @@ def run_fgo_with_propagator(config_path,
     fgo = SatelliteOrbitFGO(measurements, R, q_pos_ric, q_vel_ric,
                             ground_stations, dt, x0=x0, P0=P0,
                             use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon,
-                            use_substep=use_substep)
+                            use_substep=use_substep, gmst0=gmst0)
     fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     # Step 7: Compute final errors

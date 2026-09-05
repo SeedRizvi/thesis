@@ -50,6 +50,7 @@ def run_ekf_with_propagator(config_path,
     initial_pos_error = config_params['initial_pos_error']
     initial_vel_error = config_params['initial_vel_error']
     duration = config_params['pm_duration']
+    gmst0 = config_params['gmst0']
 
     from propagator import OrbitPropagator
     prop = OrbitPropagator("orbDetHOUSE")
@@ -133,7 +134,8 @@ def run_ekf_with_propagator(config_path,
             print(f"   Range noise: {range_noise_m} metres")
 
     measurements, R = simulate_measurements(truth_states, times, ground_stations,
-                                            measurement_noise_deg, use_range, range_noise_m)
+                                            measurement_noise_deg, use_range, range_noise_m,
+                                            gmst0=gmst0)
 
     # Step 4: Setup process noise
     q_pos_ric = np.array(process_noise_pos, dtype=float)
@@ -194,7 +196,7 @@ def run_ekf_with_propagator(config_path,
     ekf = SatelliteOrbitEKF(measurements, R, q_pos_ric, q_vel_ric,
                             ground_stations, dt, x0=x0, P0=P0,
                             use_range=use_range, manoeuvres=manoeuvres,
-                            epsilon=epsilon)
+                            epsilon=epsilon, gmst0=gmst0)
     ekf.run(verbose=verbose)
 
     # Step 8: Compute final errors

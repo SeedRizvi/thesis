@@ -113,7 +113,8 @@ class SatelliteOrbitFGO:
                  meas_per_station: int = None,
                  manoeuvres=None,
                  epsilon: float = 0.5,
-                 use_substep: bool = False):
+                 use_substep: bool = False,
+                 gmst0: float = 0.0):
         
         self.ground_stations = ground_stations
         self.n_stations = len(ground_stations)
@@ -143,6 +144,7 @@ class SatelliteOrbitFGO:
         self.J2 = 1.08262668e-3
         self.R_earth = 6378137.0
         self.omega_earth = 7.2921159e-5
+        self.gmst0 = gmst0  # GMST at the arc epoch, t = 0
 
         self.meas = meas
         self.q_pos_ric = np.array(q_pos_ric, dtype=float)
@@ -302,7 +304,7 @@ class SatelliteOrbitFGO:
         """Compute azimuth, elevation, and optionally range"""
         lat, lon, alt = r_station_llh
         
-        theta = self.omega_earth * t
+        theta = self.gmst0 + self.omega_earth * t
         
         R_ecef_to_eci = np.array([
             [cos(theta), -sin(theta), 0],
@@ -602,6 +604,7 @@ class SatelliteOrbitFGO:
         search failures, so lambda_reg > 1e10 bails out after ~16 of them.
         '''
         finished = False
+        converged = False
         num_iters = 0
         lambda_reg = 1e-6
         cost_history = []
@@ -683,16 +686,21 @@ class SatelliteOrbitFGO:
             
             # The linear model has nothing left to promise.
             if rel_pred_red is not None and rel_pred_red < CONV_REL_PRED:
+                converged = True
                 finished = True
             
             # Or it keeps promising and never delivers.
             if len(cost_history) == STALL_WINDOW + 1 and cost_history[0] > 0:
                 window_red = (cost_history[0] - best_cost) / cost_history[0]
                 if window_red < STALL_REL_TOL:
+                    converged = True
                     finished = True
             
             if num_iters >= max_iters or lambda_reg > 1e10:
                 finished = True
+
+            self.num_iters = num_iters
+            self.converged = converged
         
         if verbose:
             print(f'\nOptimisation finished after {num_iters} iterations')
