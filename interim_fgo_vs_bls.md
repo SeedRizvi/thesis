@@ -1,7 +1,8 @@
 # Interim results — FGO vs BLS vs EKF
 
 20 seeds per cell. Angles-only, 2 arcsec, 40% manoeuvre epoch, dt = 60 s, epsilon = 100, pure Gauss-Newton, max_iterations = 300.
-SRP where present: A = 20 m^2, Cr = 1.5, satMass = 1000 kg. Q recalibrated per scenario (5x per-step RMS mismatch).
+SRP where present: A = 20 m^2, Cr = 1.5, satMass = 1000 kg. Q recalibrated per scenario (5x per-step RMS mismatch)
+-- note this sizes Q to forces the estimators do not model; the `baseline Q` section holds Q at the 2-body + J2 value instead.
 
 Measurement geometry uses GMST at MJD_start for the ECI-to-ECEF rotation. Earlier revisions of this document used `theta = omega_earth * t`, which placed the stations 233 degrees away in longitude and put the satellite below the horizon for the whole arc. Every number here has been re-measured since that fix.
 
@@ -131,6 +132,28 @@ N = 1656 steps · Q = 95.2x baseline
 | RIC0.5 | FGO | 195.80 ± 22.99 | 0.03081 ± 0.00361 | 0.11284 ± 0.01463 | 13.0% | 60.0 ± 30.4 | -56.5 | 6.3 / 9 | 20/20 | 13.6 | 3405.20 |
 | RIC0.5 | BLS | 905.61 ± 0.89 | 0.09548 ± 0.00056 | 0.09841 ± 0.00139 | 11.4% | 86.5 ± 18.3 | -86.5 | 7.0 / 8 | 20/20 | 15.2 | — |
 | RIC0.5 | EKF | 345.74 ± 28.07 | 0.13828 ± 0.04350 | 0.13486 ± 0.03695 | 15.6% | 66.5 ± 39.2 | -46.5 | — | — | 1.7 | — |
+
+## Third-body — Sun + Moon + SRP, 1.15 day arc, baseline Q
+
+20 seeds per cell. Identical to the section above except that Q is held at the 2-body + J2 value instead of being recalibrated to the scenario. The third-body and SRP accelerations are unmodelled by every estimator, so recalibrating Q to them sizes the process noise to a force the estimator is otherwise blind to; this section does not. BLS never uses Q, so its rows are identical to the section above by construction.
+
+RIC0 is omitted: with no true burn the FGO does not converge under baseline Q within 300 iterations. I0.2 is omitted for the same reason.
+
+### -B  (manoeuvre not estimated)
+
+| config | est | pos RMS (m) | vel RMS (m/s) | iters | conv | runtime (s) | rigid_dev (m) |
+|---|---|---|---|---|---|---|---|
+| RIC0.5 | FGO | 4247.37 ± 1.04 | 0.36264 ± 0.00017 | 4.9 / 6 | 20/20 | 10.8 | 21164.02 |
+| RIC0.5 | BLS | 8591.79 ± 0.25 | 0.70232 ± 0.00011 | 3.7 / 6 | 20/20 | 5.6 | — |
+| RIC0.5 | EKF | 6661.12 ± 4.63 | 0.71833 ± 0.00983 | — | — | 1.2 | — |
+
+### -G  (manoeuvre estimated)
+
+| config | est | pos RMS (m) | vel RMS (m/s) | dv err (m/s) | dv % | \|t* err\| (s) | t* signed (s) | iters | conv | runtime (s) | rigid_dev (m) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| RIC0.5 | FGO | 833.47 ± 0.96 | 0.09698 ± 0.00071 | 0.13558 ± 0.00156 | 15.7% | 320.5 ± 18.7 | -320.5 | 28.0 / 120 | 20/20 | 86.5 | 397.52 |
+| RIC0.5 | BLS | 905.61 ± 0.89 | 0.09548 ± 0.00056 | 0.09841 ± 0.00139 | 11.4% | 86.5 ± 18.3 | -86.5 | 7.0 / 8 | 20/20 | 14.1 | — |
+| RIC0.5 | EKF | 1493.41 ± 35.75 | 0.22899 ± 0.03193 | 0.80485 ± 0.56748 | 92.9% | 326.3 ± 333.7 | -168.9 | — | — | 1.6 | — |
 
 ## Third-body — Sun + SRP, 1.15 day arc
 
