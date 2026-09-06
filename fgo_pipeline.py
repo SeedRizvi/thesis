@@ -209,7 +209,6 @@ def run_fgo_with_propagator(config_path,
                            max_iterations=None,
                            verbose=True,
                            use_gaussian_estimation=True,
-                           use_substep=False,
                            epsilon_override=None):
     """
     Complete pipeline: propagate orbit, simulate measurements, run FGO
@@ -396,7 +395,7 @@ def run_fgo_with_propagator(config_path,
     fgo = SatelliteOrbitFGO(measurements, R, q_pos_ric, q_vel_ric,
                             ground_stations, dt, x0=x0, P0=P0,
                             use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon,
-                            use_substep=use_substep, gmst0=gmst0)
+                            gmst0=gmst0)
     fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     # Step 7: Compute final errors
@@ -660,8 +659,6 @@ if __name__ == '__main__':
                        help='Suppress verbose output')
     parser.add_argument('--no-gaussian', dest='use_gaussian', action='store_false', default=True,
                        help='Disable Gaussian impulse estimation (use legacy split-propagation)')
-    parser.add_argument('--substep', dest='use_substep', action='store_true', default=False,
-                       help='Enable sub-stepping near manoeuvre epoch')
     parser.add_argument('--epsilon', type=float, default=None,
                        help='Override Gaussian pulse width epsilon (seconds)')
 
@@ -675,7 +672,6 @@ if __name__ == '__main__':
         max_iterations=args.max_iters,
         verbose=not args.quiet,
         use_gaussian_estimation=args.use_gaussian,
-        use_substep=args.use_substep,
         epsilon_override=args.epsilon
     )
     

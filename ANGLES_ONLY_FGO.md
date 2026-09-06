@@ -1076,3 +1076,25 @@ one_rev,   9946 cols exhaustive : max rel discrepancy 1.09e-08,  0 cols > 1e-3
 **Note on repo state:** `epsilon = 100` and pure Gauss-Newton are used by the
 harness but are **not** applied to `Orbit_FGO.py` or the configs. The repo's
 default behaviour is still epsilon = 30 with the vestigial damping.
+
+---
+
+## 21. SETTLED: EKF-G |dv| blow-up with range at epsilon = 30
+
+Recorded 2026-08-28 so it is not re-investigated. Moved here from `TODO.md`;
+the raw data it cites (`ekf_phase2.json` / `ekf_phase3.json`) was scratchpad-only
+and no longer exists, so this summary is the only surviving record.
+
+EKF-G |dv| error blows up with range at eps=30 (1.031 m/s vs a true 0.866, i.e.
+worse than guessing zero) but is fine angles-only at eps=100 (0.057).
+
+Diagnosed: the filter is statistically consistent (NIS/dof 0.99-1.03 in all
+cells, so the covariance is NOT optimistic and the Q fix did not make it
+over-confident). dv does not jump at the burn -- it drifts for the whole
+post-burn arc via the cross-covariance `P[0:6,6:]`, which carries real and
+mostly USEFUL information. Process noise on the dv/t* block changes nothing
+(<4% at any level), so it is not a confidence lock-in. Decommissioning dv/t*
+after the burn window fixes the range case (-62%) but is significantly WORSE
+at eps=100 angles-only (+365%), which is the shipped configuration.
+
+No fix applied; this is a range-plus-narrow-pulse artefact, not a defect.

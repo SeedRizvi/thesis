@@ -34,7 +34,7 @@ Measurement geometry uses GMST at MJD_start for the ECI-to-ECEF rotation. Earlie
 
 Values are mean ± standard deviation over seeds. `conv` = seeds terminating on the solver's own criteria (EKF is a filter: not applicable), `iters` contains `mean/max`.
 
-`rigid_dev` = how far the FGO's estimated trajectory strays from a plain propagation of its own starting state. Zero means it produced exactly what BLS could have, large means it used process noise to bend off that path.
+`rigid_dev` = how far the FGO's estimated trajectory strays from a plain propagation of its own starting state. Zero means it produced exactly what BLS could have; large means it used process noise to bend off that path.
 """
 
 HDR_B = ('| config | est | pos RMS (m) | vel RMS (m/s) | iters | conv | '

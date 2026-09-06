@@ -55,27 +55,6 @@ ARC_LENGTHS = [0.25, 0.5, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
 MJD0 = 59349.00
 
 
-BLACKOUTS = {
-    'bo_pre':  (0.10, 0.40),   # gap ends at the burn
-    'bo_span': (0.25, 0.55),   # gap straddles the burn
-    'bo_post': (0.60, 0.90),   # burn seen, post-burn arc dark
-}
-
-
-def register_blackouts(forces=None):
-    """Blackout windows, 30% of the arc each, over the given force model."""
-    names = []
-    for k, w in BLACKOUTS.items():
-        key = k if forces is None else f'{k}_{forces}'
-        base = dict(SCEN[forces]) if forces else {}
-        base.pop('title', None)
-        SCEN[key] = dict(base, blackout=w,
-                         title=f'Measurement dropout {w[0]:.0%}-{w[1]:.0%} of arc'
-                               + (f' — {forces}' if forces else ' — 2-body + J2'))
-        names.append(key)
-    return names
-
-
 def register_arc_sweep(lengths=None):
     """Arc-length scenarios, manoeuvre held at 40% of each arc."""
     names = []
@@ -139,8 +118,6 @@ def build_config(scen, cfg, q_pos=None, q_vel=None):
         c['fgo_parameters']['process_noise_position'] = [float(v) for v in q_pos]
         c['fgo_parameters']['process_noise_velocity'] = [float(v) for v in q_vel]
     c['fgo_parameters']['max_iterations'] = MAX_ITERS
-    if s.get('blackout'):
-        c['fgo_parameters']['blackout'] = list(s['blackout'])
 
     os.makedirs(CFG_DIR, exist_ok=True)
     path = os.path.join(CFG_DIR, f'{scen}_{cfg}.yml')
@@ -202,8 +179,6 @@ def main():
     ap.add_argument('--workers', type=int, default=12)
     ap.add_argument('--scenarios', nargs='*', default=None)
     ap.add_argument('--arc-sweep', action='store_true')
-    ap.add_argument('--blackout-sweep', nargs='?', const=None, default=False,
-                    help='blackout windows; optional value names a force scenario to cross with')
     ap.add_argument('--arcs', nargs='*', type=float, default=None)
     ap.add_argument('--merge-into', default=None,
                     help='merge results into this existing JSON instead of replacing it')
@@ -211,9 +186,7 @@ def main():
     ap.add_argument('--configs', nargs='*', default=CFGS)
     ap.add_argument('--out', default='report_data/interim_suite/interim_suite.json')
     a = ap.parse_args()
-    if a.blackout_sweep is not False:
-        a.scenarios = register_blackouts(a.blackout_sweep)
-    elif a.arc_sweep:
+    if a.arc_sweep:
         a.scenarios = register_arc_sweep(a.arcs)
     elif a.scenarios is None:
         a.scenarios = SCEN_ORDER
@@ -246,7 +219,6 @@ def main():
                 'epsilon': cp['epsilon'],
                 'max_iterations': MAX_ITERS,
                 'gmst0': cp['gmst0'],
-                'blackout': cp['blackout'],
                 '_gs': gs,
             }
             N = len(TRUTH[(scen, cfg)][0])

@@ -113,7 +113,6 @@ class SatelliteOrbitFGO:
                  meas_per_station: int = None,
                  manoeuvres=None,
                  epsilon: float = 0.5,
-                 use_substep: bool = False,
                  gmst0: float = 0.0):
         
         self.ground_stations = ground_stations
@@ -158,7 +157,6 @@ class SatelliteOrbitFGO:
 
         # Gaussian impulse manoeuvre parameters
         self.epsilon = epsilon
-        self.use_substep = use_substep
         if manoeuvres is not None and len(manoeuvres) > 0:
             self.manoeuvres = manoeuvres
             self.n_manoeuvres = len(manoeuvres)
@@ -236,16 +234,6 @@ class SatelliteOrbitFGO:
 
         return np.concatenate([v, a_total])
 
-    def _needs_substep(self, t_start, t_end):
-        """Check if interval overlaps with any manoeuvre's 3-sigma Gaussian window."""
-        for j in range(self.n_manoeuvres):
-            t_star = self.man_params[4*j+3]
-            window_lo = t_star - 3 * self.epsilon
-            window_hi = t_star + 3 * self.epsilon
-            if t_start < window_hi and t_end > window_lo:
-                return True
-        return False
-
     def _rk4_step(self, state, t, dt):
         """Single RK4 step with time-aware dynamics."""
         k1 = self.orbital_dynamics(state, t)
@@ -255,11 +243,7 @@ class SatelliteOrbitFGO:
         return state + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
 
     def prop_one_timestep(self, state, t_start=None):
-        """Propagate state by one timestep using RK4 integration.
-
-        When t_start is provided and manoeuvres exist, uses adaptive sub-stepping
-        near manoeuvre epochs to resolve the narrow Gaussian pulse.
-        """
+        """Propagate state by one timestep using RK4 integration."""
         going_out = state.copy()
         dt = self.prop_dt
 
@@ -269,17 +253,7 @@ class SatelliteOrbitFGO:
             else:
                 t_current = None
 
-            if t_current is not None and self.n_manoeuvres > 0 and \
-               self.use_substep and self._needs_substep(t_current, t_current + dt):
-                # Adaptive sub-stepping: use small steps to resolve Gaussian
-                sub_dt = self.epsilon / 5.0
-                n_sub = int(ceil(dt / sub_dt))
-                sub_dt = dt / n_sub  # Exact division
-                t_sub = t_current
-                for _ in range(n_sub):
-                    going_out = self._rk4_step(going_out, t_sub, sub_dt)
-                    t_sub += sub_dt
-            elif t_current is not None:
+            if t_current is not None:
                 going_out = self._rk4_step(going_out, t_current, dt)
             else:
                 # No time info: original behaviour (no Gaussian term)

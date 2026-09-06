@@ -81,7 +81,7 @@ fgo_parameters:
   initial_velocity_error: 1.0     # Initial velocity error std dev (m/s)
   
   # Optimisation settings
-  max_iterations: 50
+  max_iterations: 150
   convergence_threshold: 0.001
 
 manoeuvre_parameters:
