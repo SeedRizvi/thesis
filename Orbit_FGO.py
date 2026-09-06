@@ -114,7 +114,8 @@ class SatelliteOrbitFGO:
                  manoeuvres=None,
                  epsilon: float = 0.5,
                  use_substep: bool = False,
-                 gmst0: float = 0.0):
+                 gmst0: float = 0.0,
+                 vis=None):
         
         self.ground_stations = ground_stations
         self.n_stations = len(ground_stations)
@@ -145,6 +146,7 @@ class SatelliteOrbitFGO:
         self.R_earth = 6378137.0
         self.omega_earth = 7.2921159e-5
         self.gmst0 = gmst0  # GMST at the arc epoch, t = 0
+        self.vis = vis  # (N, n_stations) bool, or None for all visible
 
         self.meas = meas
         self.q_pos_ric = np.array(q_pos_ric, dtype=float)
@@ -466,6 +468,8 @@ class SatelliteOrbitFGO:
         for i in range(self.N):
             t = i * self.dt
             for s_idx in range(self.n_stations):
+                if self.vis is not None and not self.vis[i, s_idx]:
+                    continue
                 mat = self.S_R_inv @ self.H_mat(self.states[i], s_idx, t)
                 row_offset = self.meas_idx(i) + s_idx * self.meas_per_station
                 data_l[t_e:t_e+H_size], row_l[t_e:t_e+H_size], col_l[t_e:t_e+H_size] = \
@@ -512,6 +516,8 @@ class SatelliteOrbitFGO:
         for i in range(self.N):
             t = i * self.dt
             for s_idx in range(self.n_stations):
+                if self.vis is not None and not self.vis[i, s_idx]:
+                    continue
                 meas_pred = self.compute_measurements(
                     state_data[i, :3], self.ground_stations[s_idx], t
                 )

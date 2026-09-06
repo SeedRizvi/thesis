@@ -24,6 +24,18 @@ def gmst_rad(mjd_ut1):
     return np.deg2rad((g % 86400.0) / 240.0) % (2 * np.pi)
 
 
+def blackout_mask(n_steps, n_stations, blackout):
+    """Per-epoch, per-station visibility. None (no `blackout` in config) means all visible."""
+    if blackout is None:
+        return None
+    f0, f1 = float(blackout[0]), float(blackout[1])
+    if not 0.0 <= f0 < f1 <= 1.0:
+        raise ValueError(f'blackout must satisfy 0 <= start < end <= 1, got {blackout}')
+    vis = np.ones((n_steps, n_stations), dtype=bool)
+    vis[int(round(f0 * n_steps)):int(round(f1 * n_steps))] = False
+    return vis
+
+
 def load_propagator_output(csv_path):
     """Load orbit propagation results from CSV file"""
     df = pd.read_csv(csv_path)
@@ -183,6 +195,7 @@ def load_config_parameters(config_path):
     params['max_iterations'] = fgo_params.get('max_iterations', 50)
     params['mjd_start'] = config['scenario_parameters']['MJD_start']
     params['gmst0'] = float(gmst_rad(params['mjd_start']))
+    params['blackout'] = fgo_params.get('blackout')
 
     # Manoeuvre section is optional, but must be complete when present
     if 'manoeuvre_parameters' in config:
@@ -251,6 +264,7 @@ def run_fgo_with_propagator(config_path,
     initial_vel_error = config_params['initial_vel_error']
     duration = config_params['pm_duration']
     gmst0 = config_params['gmst0']
+    blackout = config_params['blackout']
 
     from propagator import OrbitPropagator
     prop = OrbitPropagator("orbDetHOUSE")
@@ -396,7 +410,9 @@ def run_fgo_with_propagator(config_path,
     fgo = SatelliteOrbitFGO(measurements, R, q_pos_ric, q_vel_ric,
                             ground_stations, dt, x0=x0, P0=P0,
                             use_range=use_range, manoeuvres=manoeuvres, epsilon=epsilon,
-                            use_substep=use_substep, gmst0=gmst0)
+                            use_substep=use_substep, gmst0=gmst0,
+                            vis=blackout_mask(len(truth_states),
+                                              len(ground_stations), blackout))
     fgo.opt(max_iters=max_iterations, verbose=verbose)
     
     # Step 7: Compute final errors

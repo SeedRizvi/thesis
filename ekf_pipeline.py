@@ -16,6 +16,7 @@ from fgo_pipeline import (
     load_config_parameters,
     simulate_measurements,
     plot_fgo_results,
+    blackout_mask,
 )
 
 
@@ -51,6 +52,7 @@ def run_ekf_with_propagator(config_path,
     initial_vel_error = config_params['initial_vel_error']
     duration = config_params['pm_duration']
     gmst0 = config_params['gmst0']
+    blackout = config_params['blackout']
 
     from propagator import OrbitPropagator
     prop = OrbitPropagator("orbDetHOUSE")
@@ -196,7 +198,9 @@ def run_ekf_with_propagator(config_path,
     ekf = SatelliteOrbitEKF(measurements, R, q_pos_ric, q_vel_ric,
                             ground_stations, dt, x0=x0, P0=P0,
                             use_range=use_range, manoeuvres=manoeuvres,
-                            epsilon=epsilon, gmst0=gmst0)
+                            epsilon=epsilon, gmst0=gmst0,
+                            vis=blackout_mask(len(truth_states),
+                                              len(ground_stations), blackout))
     ekf.run(verbose=verbose)
 
     # Step 8: Compute final errors

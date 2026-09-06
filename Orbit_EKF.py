@@ -37,12 +37,12 @@ class SatelliteOrbitEKF(SatelliteOrbitFGO):
     def __init__(self, meas, R, q_pos_ric, q_vel_ric, ground_stations,
                  dt=60.0, x0=None, P0=None, use_range=True,
                  meas_per_station=None, manoeuvres=None, epsilon=0.5,
-                 gmst0=0.0):
+                 gmst0=0.0, vis=None):
 
         # Parent sets up physics, noise, manoeuvre params, constants, etc.
         super().__init__(meas, R, q_pos_ric, q_vel_ric, ground_stations,
                          dt, x0, P0, use_range, meas_per_station, manoeuvres,
-                         epsilon, gmst0=gmst0)
+                         epsilon, gmst0=gmst0, vis=vis)
 
         # Reconstruct R covariance from parent's S_R_inv = inv(chol(R))
         L_R = la.inv(self.S_R_inv)
@@ -147,6 +147,8 @@ class SatelliteOrbitEKF(SatelliteOrbitFGO):
         P_upd = P.copy()
 
         for s_idx in range(self.n_stations):
+            if self.vis is not None and not self.vis[k, s_idx]:
+                continue
             # Predicted measurement
             z_pred = np.array(self.compute_measurements(
                 x_upd[:3], self.ground_stations[s_idx], t_k))

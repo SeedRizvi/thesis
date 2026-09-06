@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from fgo_pipeline import (load_config_parameters,
-                          simulate_measurements, plot_fgo_results)
+                          simulate_measurements, plot_fgo_results, blackout_mask)
 from Orbit_FGO import eci_to_ric, ric_to_eci
 from Orbit_EKF import SatelliteOrbitEKF, build_P0
 from mc_fgo import (propagate_truth, build_summary, print_summary,
@@ -89,6 +89,8 @@ def run_ekf_seed(seed, truth_states, times, dt, ground_stations, params,
         ground_stations, dt, x0=x0, P0=P0,
         use_range=params['use_range'], manoeuvres=manoeuvres,
         epsilon=params['epsilon'], gmst0=params['gmst0'],
+        vis=blackout_mask(len(truth_states), len(ground_stations),
+                          params.get('blackout')),
     )
 
     # Log initial guesses
@@ -306,6 +308,7 @@ def main():
             'epsilon':               config_params['epsilon'],
             'max_iterations':        config_params['max_iterations'],
             'gmst0':                 config_params['gmst0'],
+            'blackout':              config_params['blackout'],
         }
 
         for mode in modes:
