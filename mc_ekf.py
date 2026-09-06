@@ -57,6 +57,7 @@ def run_ekf_seed(seed, truth_states, times, dt, ground_stations, params,
         params['measurement_noise_deg'],
         use_range=params['use_range'],
         range_noise_m=params['range_noise_m'],
+        gmst0=params['gmst0'],
     )
 
     x0 = truth_states[0].copy()
@@ -87,7 +88,7 @@ def run_ekf_seed(seed, truth_states, times, dt, ground_stations, params,
         params['q_pos_ric'], params['q_vel_ric'],
         ground_stations, dt, x0=x0, P0=P0,
         use_range=params['use_range'], manoeuvres=manoeuvres,
-        epsilon=params['epsilon'],
+        epsilon=params['epsilon'], gmst0=params['gmst0'],
     )
 
     # Log initial guesses
@@ -304,6 +305,7 @@ def main():
             't_star_initial_error':  config_params['t_star_initial_error'],
             'epsilon':               config_params['epsilon'],
             'max_iterations':        config_params['max_iterations'],
+            'gmst0':                 config_params['gmst0'],
         }
 
         for mode in modes:
