@@ -8,6 +8,7 @@ import numpy as np
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 JSON = os.path.join(ROOT, 'report_data/interim_suite/interim_suite.json')
 ARC_JSON = os.path.join(ROOT, 'report_data/interim_suite/arc_sweep.json')
+BQ_JSON = os.path.join(ROOT, 'report_data/interim_suite/baseline_q.json')
 BO_JSON = os.path.join(ROOT, 'report_data/interim_suite/blackout_sweep.json')
 BO_LS_JSON = os.path.join(ROOT, 'report_data/interim_suite/blackout_lunisolar.json')
 OUT = os.path.join(ROOT, 'interim_fgo_vs_bls.md')
@@ -26,7 +27,8 @@ DV_TRUE = {'RIC0': 0.0, 'I0.2': 0.2, 'RIC0.5': np.sqrt(3 * 0.5 ** 2)}
 HEADER = """# Interim results — FGO vs BLS vs EKF
 
 {nseeds} seeds per cell. Angles-only, 2 arcsec, 40% manoeuvre epoch, dt = 60 s, epsilon = 100, pure Gauss-Newton, max_iterations = 300.
-SRP where present: A = 20 m^2, Cr = 1.5, satMass = 1000 kg. Q recalibrated per scenario (5x per-step RMS mismatch).
+SRP where present: A = 20 m^2, Cr = 1.5, satMass = 1000 kg. Q recalibrated per scenario (5x per-step RMS mismatch)
+-- note this sizes Q to forces the estimators do not model; the `baseline Q` section holds Q at the 2-body + J2 value instead.
 
 Measurement geometry uses GMST at MJD_start for the ECI-to-ECEF rotation. Earlier revisions of this document used `theta = omega_earth * t`, which placed the stations 233 degrees away in longitude and put the satellite below the horizon for the whole arc. Every number here has been re-measured since that fix.
 
@@ -207,6 +209,39 @@ def blackout_section():
     return out
 
 
+def baseline_q_section():
+    """Lunisolar truth with Q left at the 2-body+J2 value."""
+    if not os.path.exists(BQ_JSON):
+        return []
+    d = json.load(open(BQ_JSON))
+    runs = d['runs']
+    if not runs:
+        return []
+    nseeds = len({r['seed'] for r in runs})
+    cfgs = [c for c in CFGS if any(r['cfg'] == c for r in runs)]
+    out = ['## Third-body — Sun + Moon + SRP, 1.15 day arc, baseline Q\n',
+           f'{nseeds} seeds per cell. Identical to the section above except that Q is '
+           'held at the 2-body + J2 value instead of being recalibrated to the '
+           'scenario. The third-body and SRP accelerations are unmodelled by every '
+           'estimator, so recalibrating Q to them sizes the process noise to a force '
+           'the estimator is otherwise blind to; this section does not. BLS never uses '
+           'Q, so its rows are identical to the section above by construction.\n',
+           'RIC0 is omitted: with no true burn the FGO does not converge under baseline '
+           'Q within 300 iterations. I0.2 is omitted for the same reason.\n']
+    for mode, hdr, label in (('B', HDR_B, '-B  (manoeuvre not estimated)'),
+                             ('G', HDR_G, '-G  (manoeuvre estimated)')):
+        out.append(f'### {label}\n')
+        out.append(hdr)
+        for cfg in cfgs:
+            for est in ('FGO', 'BLS', 'EKF'):
+                rs = [r for r in runs if r['cfg'] == cfg and r['est'] == est
+                      and r['mode'] == mode]
+                if rs:
+                    out.append(row(rs, cfg, est, mode))
+        out.append('')
+    return out
+
+
 def main():
     d = json.load(open(JSON))
     runs, meta = d['runs'], d['meta']
@@ -233,6 +268,8 @@ def main():
             out.append('')
         if scen == 'arc25':
             out += arc_section()
+        if scen == 'lunisolar':
+            out += baseline_q_section()
     out += blackout_section()
     open(OUT, 'w').write('\n'.join(out) + '\n')
     print(f'wrote {OUT}  ({len(runs)} runs, {nseeds} seeds)')

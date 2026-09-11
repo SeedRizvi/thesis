@@ -52,7 +52,18 @@ SCEN = {
 SCEN_ORDER = ['baseline', 'arc25', 'lunisolar', 'sun', 'moon']
 
 ARC_LENGTHS = [0.25, 0.5, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+EPS_VALUES = [20, 25, 30, 45, 60, 100, 150, 200, 300]
 MJD0 = 59349.00
+
+
+def register_eps_sweep(values=None):
+    """Gaussian pulse width scenarios. Epsilon enters the estimator only, not truth."""
+    names = []
+    for e in (values or EPS_VALUES):
+        k = f'eps{e:g}'
+        SCEN[k] = dict(title=f'epsilon = {e:g} s', epsilon=float(e))
+        names.append(k)
+    return names
 
 
 def register_arc_sweep(lengths=None):
@@ -118,6 +129,8 @@ def build_config(scen, cfg, q_pos=None, q_vel=None):
         c['fgo_parameters']['process_noise_position'] = [float(v) for v in q_pos]
         c['fgo_parameters']['process_noise_velocity'] = [float(v) for v in q_vel]
     c['fgo_parameters']['max_iterations'] = MAX_ITERS
+    if 'epsilon' in s:
+        c['manoeuvre_parameters']['epsilon'] = s['epsilon']
 
     os.makedirs(CFG_DIR, exist_ok=True)
     path = os.path.join(CFG_DIR, f'{scen}_{cfg}.yml')
@@ -179,6 +192,13 @@ def main():
     ap.add_argument('--workers', type=int, default=12)
     ap.add_argument('--scenarios', nargs='*', default=None)
     ap.add_argument('--arc-sweep', action='store_true')
+    ap.add_argument('--eps-sweep', action='store_true')
+    ap.add_argument('--eps', nargs='*', type=float, default=None,
+                    help='epsilon values to sweep (default: %s)' % EPS_VALUES)
+    ap.add_argument('--baseline-q', action='store_true',
+                    help="use the 2-body+J2 Q for every scenario, instead of "
+                         "recalibrating to the scenario's own (deliberately "
+                         "unmodelled) forces")
     ap.add_argument('--arcs', nargs='*', type=float, default=None)
     ap.add_argument('--merge-into', default=None,
                     help='merge results into this existing JSON instead of replacing it')
@@ -186,15 +206,23 @@ def main():
     ap.add_argument('--configs', nargs='*', default=CFGS)
     ap.add_argument('--out', default='report_data/interim_suite/interim_suite.json')
     a = ap.parse_args()
-    if a.arc_sweep:
+    if a.eps_sweep:
+        a.scenarios = register_eps_sweep(a.eps)
+    elif a.arc_sweep:
         a.scenarios = register_arc_sweep(a.arcs)
     elif a.scenarios is None:
         a.scenarios = SCEN_ORDER
 
     qbase = None
     meta = {}
+    if a.baseline_q:
+        qb_pos, qb_vel = calibrate('baseline')
+        print(f'[Q] baseline Q applied to every scenario: q_vel = '
+              f'[{qb_vel[0]:.4e}, {qb_vel[1]:.4e}, {qb_vel[2]:.4e}]', flush=True)
     for scen in a.scenarios:
         q_pos, q_vel = calibrate(scen)
+        if a.baseline_q:
+            q_pos, q_vel = qb_pos, qb_vel
         if qbase is None:
             qbase = q_vel.copy()
         mult = float(np.mean(q_vel / qbase))

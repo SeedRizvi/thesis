@@ -8,15 +8,20 @@
   eps=15 on 1/5, eps>=20 converged on every seed). That probe's raw data was
   scratchpad-only and is gone, and it predates the GMST fix which changed
   convergence substantially -- so re-measure rather than cite it.
-- Update project structure in README. Also mention where the manuscript results are
-  in the repo.
-- Revisit the Q magnitude, separately from the units fix. The values are now
-  correctly treated as standard deviations, but whether 5x the measured RMS
-  mismatch is the right margin was never deliberately chosen. Tightening Q was
-  a large accuracy win (-56% at 2 arcsec). It was also thought to make the problem
-  markedly stiffer, but that was measured pre-GMST: across the 1920 committed
-  solver runs the iteration count is now p50=5, p99=30, p99.9=47, max=83.
-- Delete or clearly mark the pre-GMST result files in report_data/ (report_mc_*.csv,
-  report_mc_w_range_*.csv, results.md, results_200mc.md). Every number in them was
-  produced with the broken measurement geometry and none can be cited. The current
-  numbers live in interim_fgo_vs_bls.md and report_data/interim_suite/.
+- Update project structure in README: it still lists only a handful of files and
+  predates mc_runner.py, the mc_* drivers, Orbit_BLS/EKF and report_data/.
+- SETTLED (2026-09-11, supervisor): Q recalibrated per scenario stays as-is,
+  including for the third-body cases where it is sized to forces the estimators do
+  not model. Rationale: process noise is inherent to the FGO formulation and BLS
+  omits it by construction, so the difference is a property of the estimators and
+  a supporting argument for the discussion rather than an unfair advantage.
+  Evidence retained for the write-up: holding Q at the 2-body+J2 value collapses
+  the lunisolar advantage from 4.63x to 1.09x (-G) and 15.26x to 2.02x (-B), with
+  rigid_dev falling 3405 -> 398 m; see the "baseline Q" section of
+  interim_fgo_vs_bls.md. A Q sweep over 1x-20x the per-step RMS mismatch showed the
+  shipped 5x is conservative (loosening it increases the FGO's margin) and that the
+  clean-arc result is nearly Q-insensitive (13.89 -> 13.28 m over a 20x range).
+  The per-step mismatch is strongly correlated (rho_1 ~ 0.999, tau ~ 225 steps),
+  so a white-noise Q is an approximation; dynamic model compensation with a shared
+  acceleration parameterisation is the principled alternative, deliberately scoped
+  out and worth a line in the discussion.
