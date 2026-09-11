@@ -139,6 +139,9 @@ def run_ekf_seed(seed, truth_states, times, dt, ground_stations, params,
         'vel_std':   float(np.std(vel_errors)),
         'vel_max':   float(np.max(vel_errors)),
         'runtime_s': float(runtime),
+        'n_iters':   None,   # EKF is a filter, not an iterative solver
+        'converged': None,
+        'rigid_dev': None,   # EKF produces a rigid trajectory by construction
     }
 
     # Delta-v and t* errors (only for EKF-G with manoeuvres)

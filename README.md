@@ -22,6 +22,20 @@ This repository was used for my engineering thesis (Honours) project and contain
 └── README.md
 ```
 
+## Manuscript Data
+All the collected data exists in the `report_data/` folder.
+
+Inside it, `report_mc_{fgo,bls,ekf}.csv`, with their `_summary` and
+`_initial_guesses` counterparts, are the current angles-only Monte Carlo results
+within the manuscript. They are written by `mc_runner.py` (or the
+individual `mc_*.py` drivers).
+
+`report_data/report_mc_w_range_*.csv` are superseded. Those runs used range
+measurements alongside angles, and predate several fixes -- most significantly a
+missing GMST offset in the measurement model, which placed the ground stations
+roughly 233 degrees away in longitude and left the satellite below the horizon
+for the whole arc. They are kept for reference only and should not be cited.
+
 ## Installation Instructions
 
 **Note**: These installation instructions are for Linux machines (native or WSL).

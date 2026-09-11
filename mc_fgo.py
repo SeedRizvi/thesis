@@ -142,6 +142,16 @@ def propagate_truth(config_path, tag):
 # Single FGO solve
 # ---------------------------------------------------------------------------
 
+def rigid_dev(fgo):
+    """RMS gap between the FGO trajectory and a rigid propagation of its own solution."""
+    s = np.zeros_like(fgo.states)
+    s[0] = fgo.states[0]
+    for i in range(1, fgo.N):
+        s[i] = fgo.prop_one_timestep(s[i - 1], (i - 1) * fgo.dt)
+    d = np.linalg.norm(fgo.states[:, :3] - s[:, :3], axis=1)
+    return float(np.sqrt(np.mean(d ** 2)))
+
+
 def run_fgo_seed(seed, truth_states, times, dt, ground_stations, params,
                  delta_v_ric, delta_v_eci, manoeuvre_state, t_star_true,
                  mode, config_tag):
@@ -239,6 +249,9 @@ def run_fgo_seed(seed, truth_states, times, dt, ground_stations, params,
         'vel_std':   float(np.std(vel_errors)),
         'vel_max':   float(np.max(vel_errors)),
         'runtime_s': float(runtime),
+        'n_iters':   int(fgo.num_iters),
+        'converged': bool(fgo.converged),
+        'rigid_dev': rigid_dev(fgo),
     }
 
     # Delta-v and t* errors (only for FGO-G with manoeuvres)
@@ -366,6 +379,15 @@ def build_summary(df):
             'runtime_mean':    grp['runtime_s'].mean(),
             'runtime_std':     grp['runtime_s'].std(),
         }
+
+        it_vals = grp['n_iters'].dropna()
+        row['iters_mean']   = it_vals.mean()   if len(it_vals) else None
+        row['iters_median'] = it_vals.median() if len(it_vals) else None
+        row['iters_max']    = it_vals.max()    if len(it_vals) else None
+        cv_vals = grp['converged'].dropna()
+        row['n_converged']  = int(cv_vals.sum()) if len(cv_vals) else None
+        rd_vals = grp['rigid_dev'].dropna() if 'rigid_dev' in grp else []
+        row['rigid_dev_mean'] = rd_vals.mean() if len(rd_vals) else None
 
         dv_vals = grp['dv_err_norm'].dropna()
         ts_vals = grp['t_star_error'].dropna()

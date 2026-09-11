@@ -141,6 +141,9 @@ def run_bls_seed(seed, truth_states, times, dt, ground_stations, params,
         'vel_std':   float(np.std(vel_errors)),
         'vel_max':   float(np.max(vel_errors)),
         'runtime_s': float(runtime),
+        'n_iters':   int(bls.num_iters),
+        'converged': bool(bls.converged),
+        'rigid_dev': None,   # BLS/EKF produce a rigid trajectory by construction
     }
 
     # Delta-v and t* errors (only for BLS-G with manoeuvres)
