@@ -372,6 +372,8 @@ def build_summary(df):
             'config':          cfg,
             'mode':            mode,
             'n_seeds':         len(grp),
+            'n_converged':     (int(grp['converged'].dropna().sum())
+                                if grp['converged'].notna().any() else None),
             'pos_rms_mean':    grp['pos_rms'].mean(),
             'pos_rms_std':     grp['pos_rms'].std(),
             'vel_rms_mean':    grp['vel_rms'].mean(),
@@ -384,8 +386,6 @@ def build_summary(df):
         row['iters_mean']   = it_vals.mean()   if len(it_vals) else None
         row['iters_median'] = it_vals.median() if len(it_vals) else None
         row['iters_max']    = it_vals.max()    if len(it_vals) else None
-        cv_vals = grp['converged'].dropna()
-        row['n_converged']  = int(cv_vals.sum()) if len(cv_vals) else None
         rd_vals = grp['rigid_dev'].dropna() if 'rigid_dev' in grp else []
         row['rigid_dev_mean'] = rd_vals.mean() if len(rd_vals) else None
 

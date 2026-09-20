@@ -53,7 +53,22 @@ SCEN_ORDER = ['baseline', 'arc25', 'lunisolar', 'sun', 'moon']
 
 ARC_LENGTHS = [0.25, 0.5, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
 EPS_VALUES = [20, 25, 30, 45, 60, 100, 150, 200, 300]
+# multipliers on the shipped Q, which is itself 5x the per-step RMS mismatch
+Q_MULTS = [0.2, 0.4, 1.0, 2.0, 4.0]
 MJD0 = 59349.00
+
+
+def register_q_sweep(bases=None, mults=None):
+    """Q scaling scenarios, crossed with the given force models."""
+    names = []
+    for base in (bases or ['baseline', 'lunisolar']):
+        for m in (mults or Q_MULTS):
+            k = f'{base}_q{m:g}'
+            b = dict(SCEN[base]); b.pop('title', None)
+            SCEN[k] = dict(b, q_scale=float(m),
+                           title=f'{base}, Q x {m:g} ({m * 5:g}x per-step RMS)')
+            names.append(k)
+    return names
 
 
 def register_eps_sweep(values=None):
@@ -193,6 +208,12 @@ def main():
     ap.add_argument('--scenarios', nargs='*', default=None)
     ap.add_argument('--arc-sweep', action='store_true')
     ap.add_argument('--eps-sweep', action='store_true')
+    ap.add_argument('--q-sweep', action='store_true')
+    ap.add_argument('--q-mults', nargs='*', type=float, default=None,
+                    help='Q multipliers relative to the shipped 5x-RMS value '
+                         '(default: %s)' % Q_MULTS)
+    ap.add_argument('--q-bases', nargs='*', default=None,
+                    help='force scenarios to cross with (default: baseline lunisolar)')
     ap.add_argument('--eps', nargs='*', type=float, default=None,
                     help='epsilon values to sweep (default: %s)' % EPS_VALUES)
     ap.add_argument('--baseline-q', action='store_true',
@@ -206,7 +227,9 @@ def main():
     ap.add_argument('--configs', nargs='*', default=CFGS)
     ap.add_argument('--out', default='report_data/interim_suite/interim_suite.json')
     a = ap.parse_args()
-    if a.eps_sweep:
+    if a.q_sweep:
+        a.scenarios = register_q_sweep(a.q_bases, a.q_mults)
+    elif a.eps_sweep:
         a.scenarios = register_eps_sweep(a.eps)
     elif a.arc_sweep:
         a.scenarios = register_arc_sweep(a.arcs)
@@ -221,6 +244,9 @@ def main():
               f'[{qb_vel[0]:.4e}, {qb_vel[1]:.4e}, {qb_vel[2]:.4e}]', flush=True)
     for scen in a.scenarios:
         q_pos, q_vel = calibrate(scen)
+        scale = SCEN[scen].get('q_scale')
+        if scale is not None:
+            q_pos, q_vel = q_pos * scale, q_vel * scale
         if a.baseline_q:
             q_pos, q_vel = qb_pos, qb_vel
         if qbase is None:
